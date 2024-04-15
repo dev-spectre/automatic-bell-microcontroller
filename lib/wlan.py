@@ -132,11 +132,12 @@ def register_ip():
         res = post(config.get("backend_api"), headers={"Content-Type": "application/json"}, data=payload).json()
         if res.get("success"):
             env.set("ip", ip)
+            env.set("jwt", f"Bearer {res["data"].get("jwt")}")
             device_id = env.set("device_id", res["data"].get("deviceId"))
             log("Device registered on database with id", device_id)
             return device_id
-        raise Exception("Device not registered", res.content)
         log("Couldn't register device")
+        raise Exception("Device not registered", res.content)
     if ip != env.get("ip"):
         from urequests import put
         
@@ -145,7 +146,7 @@ def register_ip():
             "key": env.get("key"),
             "ip": ip
             })
-        res = put(config.get("backend_api"), headers={"Content-Type": "application/json"}, data=payload).json()
+        res = put(config.get("backend_api"), headers={"Content-Type": "application/json", "Authorization": env.get("jwt")}, data=payload).json()
         if res.get("success"):
             log("IP changed on database", ip)
             return env.set("ip", ip)
