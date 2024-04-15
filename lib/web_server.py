@@ -25,7 +25,6 @@ async def set_time(request):
     
     sync_from_unixtime(unixtime + config.get("time_fetch_offset"))
     
-    raise Exception
     return {
         "success": True,
         "data": { "datetime": get_time() },
