@@ -12,10 +12,12 @@ class Comms():
         
     def send(self, message):
         message += "\n"
-        bytes_sent = self.uart.write(bytes(message, "utf-8"))
+        size = str(len(message)) + "-"
+        bytes_sent = self.uart.write(bytes(size+message, "utf-8"))
         log(f"Sent {bytes_sent} bytes of {message} (length {len(message)-1})")
-        
-    def read(self):
+        return self.read(response=True) == "ok"
+    
+    def read(self, response=False):
         start_time = time_ns()
         new_line = False
         message = ""
@@ -24,8 +26,11 @@ class Comms():
                 message += self.uart.read().decode("utf-8", "replace")
                 if "\n" in message:
                     new_line = True
-                    message = message.strip('\n')
                     log(f"received message: {message}\n(length: {len(message)})")
+
+                    [size, message] = message.split("-", 1)
+                    message = message.rstrip("\n")
+                    if not response and int(size) == len(message): self.send("ok")
                     return message
             elif time_ns() > (start_time + 5 * 10**9):
                 log(f"Message read timeout")
