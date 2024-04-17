@@ -96,7 +96,6 @@ def connect_to_wlan():
         log(f"Connection IP: {ip}")
         return config.set("ip", ip)
         
-    conn = None
     for wlan_cred in wlan_credentials:
         if wlan.isconnected():
           ip = get_ip()
