@@ -1,8 +1,8 @@
 from lib.wlan import connect_to_wlan, register_ip
-from lib.clock import sync_with_worldtimeapi
+from lib.clock import sync_with_worldtimeapi, get_RTC
 from lib.utils import try_till_success
 from switch import repeat_timer
-from lib.web_server import app  
+from lib.web_server import app
 
 if __name__ == "__main__":    
     try_till_success(connect_to_wlan, max_try=10, should_reset=True)

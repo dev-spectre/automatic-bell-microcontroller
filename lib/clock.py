@@ -21,6 +21,24 @@ def sync_from_unixtime(unixtime, weekday=None):
     
     rtc = RTC()
     rtc.datetime((year, month, day, weekday, hour, minute, second, 0))
+    sync_rtc_over_uart()
+
+def get_RTC():
+    rtc = RTC()
+    return rtc.datetime()
+
+def sync_rtc_over_uart():
+    from comms import comms
+    from time import sleep
+
+    while True:
+        if comms.send(str(get_RTC())):
+            break
+        sleep(0.5)
+
+def sync_from_RTC(datetime):
+    rtc = RTC()
+    rtc.datetime(datetime)
 
 def sync_with_worldtimeapi():
     from log import log

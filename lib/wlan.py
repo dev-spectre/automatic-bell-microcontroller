@@ -15,10 +15,12 @@ def is_connected():
     return wlan.isconnected()
 
 def connect(ssid, password):
-    from picozero import pico_led
+    from machine import Pin
     from time import sleep
     from network import STAT_GOT_IP, STAT_NO_AP_FOUND, STAT_WRONG_PASSWORD, STAT_CONNECT_FAIL
     from error import NoAccessPointFound, WrongPassword, ConnectionFailed
+    
+    pico_led = Pin("LED", Pin.OUT)
     
     wlan.config(pm=WLAN.PM_PERFORMANCE)
     wlan.active(True)
@@ -96,6 +98,7 @@ def connect_to_wlan():
         log(f"Connection IP: {ip}")
         return config.set("ip", ip)
         
+    conn = None
     for wlan_cred in wlan_credentials:
         if wlan.isconnected():
           ip = get_ip()
@@ -131,12 +134,12 @@ def register_ip():
         res = post(config.get("backend_api"), headers={"Content-Type": "application/json"}, data=payload).json()
         if res.get("success"):
             env.set("ip", ip)
-            env.set("jwt", f"Bearer {res["data"].get("jwt")}")
+            env.set("jwt", f"Bearer {res['data'].get('jwt')}")
             device_id = env.set("device_id", res["data"].get("deviceId"))
             log("Device registered on database with id", device_id)
             return device_id
         log("Couldn't register device")
-        raise Exception("Device not registered", res.content)
+        raise Exception("Device not registered", str(res))
     if ip != env.get("ip"):
         from urequests import put
         

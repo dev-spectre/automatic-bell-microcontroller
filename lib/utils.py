@@ -11,6 +11,9 @@ def try_till_success(function, err_msg="", max_try = -1, should_reset = False):
             return function()
         except TypeError as err:
             return log(str(err))
+        except OSError as err:
+            collect()
+            log(str(err), err_msg)
         except Exception as err:
             log(str(err), err_msg)
             continue

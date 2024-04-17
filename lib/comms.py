@@ -37,3 +37,5 @@ class Comms():
                 return None
         else:
             return None
+
+comms = Comms()
