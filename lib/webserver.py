@@ -1,4 +1,5 @@
 from microdot import Microdot, redirect
+from schedule import schedule
 from config import config
 
 app = Microdot()
@@ -36,9 +37,9 @@ async def get_config(request):
     
     if not key:
         return {
-            "success": False,
-            "msg": "Key not found"
-            }, 422
+            "success": True,
+            "data": config.load(),
+            }, 200
     
     value = config.get(key)
     if not value:
@@ -50,13 +51,6 @@ async def get_config(request):
     return {
         "success": True,
         "data": { "value": value },
-        }
-
-@app.get("/configs")
-async def get_configs(request):
-    return {
-        "success": True,
-        "data": config.load()
         }
 
 @app.route("/config", methods=["POST", "PUT"])
@@ -134,6 +128,136 @@ async def remove_config(request):
             "value": config.remove(key),
             },
         }
+
+@app.get("/schedule")
+async def get_schedule(request):
+    key = request.json.get("key")
+    
+    if not key:
+        return {
+            "success": True,
+            "data": schedule.load(),
+            }, 200
+    
+    value = schedule.get("schedules").get(key)
+    if not value:
+        return {
+            "success": False,
+            "msg": "Key doesn't exist"
+            }
+    
+    return {
+        "success": True,
+        "data": { key: value },
+        }, 200
+
+
+@app.delete("/schedule")
+async def delete_schedule(request):
+    schedules_to_delete = request.json.get("keys")
+    
+    if not schedules_to_delete:
+        return {
+            "success": False,
+            "msg": "No schedules given to delete",
+            }, 422
+    
+    schedules = schedule.get("schedules")
+    deleted = {}
+    active = schedule.get("active")
+    for key in schedules_to_delete:
+        if key == active or key not in schedules: continue
+        deleted[key] = schedules.pop(key)
+    schedule.set("schedules", schedules)
+    return {
+        "success": True,
+        "data": deleted,
+        }, 200
+
+@app.route("/schedule", methods=["POST", "PUT"])
+async def create_schedule(request):
+    schedules_to_add = request.json.get("schedules")
+    
+    if not schedules_to_delete:
+        return {
+            "success": False,
+            "msg": "No schedules given to add/update",
+            }, 422
+    
+    schedules = schedule.get("schedules")
+    added = {}
+    for key in schedules_to_add:
+        schedules[key] = schedules_to_add[key]
+        added[key] = schedules_to_add[key]
+    schedule.set("schedules", schedules)
+    return {
+        "success": True,
+        "data": added,
+        }, 201
+
+@app.get("/active")
+async def get_active_schedule(request):
+    return {
+        "success": True,
+        "data": schedule.get("active")
+        }, 200
+
+@app.put("/active")
+async def update_active_schedule(request):
+    active = request.json.get("active")
+    schedules = schedule.get("schedules")
+    if active not in schedules:
+        return {
+            "success": False,
+            "msg": "Schedule doesn't exists",
+            }, 404
+    
+    schedule.set("active", active)
+    return {
+        "success": True,
+        "msg": f"{active} is now active schedule",
+        "data": {
+            "active": active,
+            },
+        }, 201
+
+@app.errorhandler(413)
+async def max_req_length(request):
+    return {
+        "success": False,
+        "msg": "Max request length reached (16KB)",
+        }, 413
+
+@app.errorhandler(404)
+async def not_found(request):
+    return {
+        "success": False,
+        "msg": "Route not found",
+        }, 404
+
+@app.errorhandler(OSError)
+def os_error(request, exception):
+    return {
+        "success": False,
+        "msg": "OS Error",
+        "err": exception,
+        }, 500
+
+@app.errorhandler(RuntimeError)
+def runtime_error(request, exception):
+    return {
+        "success": False,
+        "msg": "Runtime error",
+        "err": exception,
+        }, 500
+
+@app.errorhandler(Exception)
+def unkown_error(request, exception):
+    return {
+        "success": False,
+        "msg": "Unkown error",
+        "err": exception
+        }, 500
 
 if __name__ == "__main__":
     app.run(port=8787)
