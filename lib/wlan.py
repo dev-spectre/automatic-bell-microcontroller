@@ -53,18 +53,6 @@ def connect(ssid, password):
     log(f"Connection IP: {get_ip()}")
     pico_led.off()
     return get_ip()
-
-def open_socket(ip, port = 80):
-    from socket import socket
-   
-    connection = socket()
-    
-    try:
-        connection.bind((ip, port))
-        connection.listen(1)
-    except:
-        pass
-    return connection
     
 def scan_and_connect():
     from error import NoAccessPointFound, WrongPassword, ConnectionFailed

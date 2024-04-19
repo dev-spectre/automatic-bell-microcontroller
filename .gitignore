@@ -4,3 +4,4 @@ log.txt
 lib/microdot*
 lib/picozero*
 lib/utemplate*
+schedule.json

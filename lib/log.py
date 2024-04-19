@@ -3,9 +3,10 @@ from clock import get_time
 from os import stat
 
 def log(*msg):
-    file_path = config.get("log")
+    file_path = config.get("log") or "/log.txt"
     line = f"[{get_time()}]: "
     for i in msg:
+        i = str(i)
         line += f" {i}"
     print(line)
     line += "\n"
@@ -23,6 +24,8 @@ def log(*msg):
             logs = f.readlines()
             logs.append(line)
             quater_len = len(logs) // 4
-            f.writelines(logs[-quater_len:])
+            r = range(-quater_len, 0, -1)
+            for i in r:
+                f.write(logs[i])
         
         collect()

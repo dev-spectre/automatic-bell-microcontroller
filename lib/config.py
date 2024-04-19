@@ -36,9 +36,3 @@ class JSON:
 
 
 config = JSON()
-
-if __name__ == "__main__":
-    config.set("test", "value")
-    print(config.load())
-    config.remove("test")
-    print(config.load())

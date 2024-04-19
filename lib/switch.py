@@ -7,13 +7,10 @@ led = Pin("LED", Pin.OUT)
 def switch_on():
     led.on()
     relay.value(0)
-    return relay.value()
-
     
 def switch_off():
     led.off()
     relay.value(1)
-    return relay.value()
 
 def timer(seconds):
     switch_on()
@@ -21,6 +18,6 @@ def timer(seconds):
     switch_off()
     
 def repeat_timer(count, timer_seconds, sleep_seconds):
-    for i in range(count):
+    for _ in range(count):
         timer(timer_seconds)
         sleep(sleep_seconds)
