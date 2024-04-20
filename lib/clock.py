@@ -30,4 +30,4 @@ def sync_with_worldtimeapi():
         sync_from_unixtime(data.get("unixtime"), data.get("day_of_week"))
         log(f"Time synced with world time api, current time: {get_time()}")
     except Exception as err:
-        log(str(err))
+        log(err)

@@ -1,8 +1,21 @@
 from microdot import Microdot, redirect
 from schedule import schedule
-from config import config
+from config import JSON, config
 
 app = Microdot()
+env = JSON("/.env.json")
+
+@app.before_request
+async def authenticate(request):
+    if request.path in ["/signin", "/res"]: return None
+    jwt = request.headers.get("Authorization")
+    userkey = env.get("userkey") 
+    if jwt != userkey:
+        print(jwt, userkey)
+        return {
+            "success": False,
+            "msg": "Invalid JWT"
+            }
 
 @app.get("/")
 async def index(request):
@@ -13,6 +26,10 @@ async def index(request):
         protocol = "http"
         
     return redirect(f"{protocol}://{config.get('frontend_domain')}/?ip={get_ip()}")
+
+@app.get("/res")
+async def response(request):
+    return { "success": True }
 
 @app.put("/time")
 async def set_time(request):
@@ -221,6 +238,25 @@ async def update_active_schedule(request):
             },
         }, 201
 
+@app.post("/signin")
+async def signin(request):
+    from urequests import delete
+    
+    userkey_id = request.json.get("userKeyId")
+    res = delete(f"{config.get('backend_api')}/user/key", headers={
+        "Content-Type": "application/json",
+        "Authorization": env.get("jwt")
+        },
+        json={
+            "userKeyId": userkey_id
+        }).json()
+    if not res.get("success") or not res.get("data").get("userKey"): return { "success": False }
+    userkey = res.get("data").get("userKey")
+    env.set("userkey", f"Bearer {userkey}")
+    return {
+        "success": True,
+        }
+
 @app.errorhandler(413)
 async def max_req_length(request):
     return {
@@ -229,6 +265,7 @@ async def max_req_length(request):
         }, 413
 
 @app.errorhandler(404)
+@app.errorhandler(405)
 async def not_found(request):
     return {
         "success": False,

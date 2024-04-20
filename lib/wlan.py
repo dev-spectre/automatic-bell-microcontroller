@@ -3,6 +3,8 @@ from config import config
 from log import log
 
 wlan = WLAN(STA_IF)
+wlan.config(pm=WLAN.PM_PERFORMANCE)
+wlan.active(True)
 
 def get_mac():
     from ubinascii import hexlify
@@ -22,12 +24,12 @@ def connect(ssid, password):
     
     pico_led = Pin("LED", Pin.OUT)
     
-    wlan.config(pm=WLAN.PM_PERFORMANCE)
-    wlan.active(True)
-    
     if (password == ""):
         password = None
-    
+        
+    if wlan.active():
+        wlan.active(True)
+        
     wlan.connect(ssid, password)
     max_wait = config.get("max_wait")
     no_ap_retry = 20
@@ -42,12 +44,13 @@ def connect(ssid, password):
             if no_ap_retry < 0:
                 raise NoAccessPointFound()
         elif status == STAT_WRONG_PASSWORD or max_wait == 1:
+            wlan.disconnect()
             log("Wrong Password")
             raise WrongPassword()
         elif status == STAT_CONNECT_FAIL:
             raise ConnectionFailed()
 
-        print("Waiting for connection, status:", status)
+        print(f"SSID: {ssid}, Password: {password}, status:", status)
         max_wait -= 1
         sleep(0.2)
     log(f"Connection IP: {get_ip()}")
@@ -60,6 +63,9 @@ def scan_and_connect():
     
     env = JSON("../.env.json")
     
+    if wlan.active():
+        wlan.active(True)
+        
     available_wlans = wlan.scan()
     log("Available WiFi:", available_wlans)
     for wlan_info in available_wlans:
@@ -80,6 +86,7 @@ def connect_to_wlan():
     from error import NoAccessPointFound, WrongPassword, ConnectionFailed
     
     wlan_credentials = config.get("wlan_credentials")
+    print(wlan_credentials)
     if not wlan_credentials:
         ssid, password, ip = scan_and_connect()
         config.set("wlan_credentials", [{ "ssid": ssid, "password": password}])
@@ -99,8 +106,6 @@ def connect_to_wlan():
           ip = connect(ssid, password)
           log(f"Connection IP: {ip}")
           return config.set("ip", ip)
-        except ConnectionFailed:
-            log("Connection failed")
         except (NoAccessPointFound, WrongPassword):
             continue
         
@@ -112,6 +117,7 @@ def register_ip():
     device_id = env.get("device_id")
     ip = get_ip()
     key = env.get("key")
+    header = {"Content-Type": "application/json", "Authorization": env.get("jwt")}
     if not device_id:
         from urequests import post
         
@@ -119,7 +125,7 @@ def register_ip():
             "key": key,
             "ip": ip
             })
-        res = post(config.get("backend_api"), headers={"Content-Type": "application/json"}, data=payload).json()
+        res = post(f"config.get('backend_api')/device", headers=header, data=payload).json()
         if res.get("success"):
             env.set("ip", ip)
             env.set("jwt", f"Bearer {res['data'].get('jwt')}")
@@ -136,7 +142,7 @@ def register_ip():
             "key": env.get("key"),
             "ip": ip
             })
-        res = put(config.get("backend_api"), headers={"Content-Type": "application/json", "Authorization": env.get("jwt")}, data=payload).json()
+        res = put(f"config.get('backend_api')/device", headers=header, data=payload).json()
         if res.get("success"):
             log("IP changed on database", ip)
             return env.set("ip", ip)
