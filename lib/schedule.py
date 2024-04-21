@@ -1,57 +1,78 @@
 from switch import switch_on, switch_off, timer, repeat_timer
 from config import JSON
 from log import log
-from time import time
+from time import mktime, localtime, time
 from asyncio import sleep
 
 schedule = JSON("/schedule.json")
 
 @micropython.native
+def remove_date_from_unixtime(unixtime):
+    if 0 <= unixtime < 86400: return unixtime
+    unixtime = localtime(unixtime)
+    unixtime = mktime((1970, 1, 1, unixtime[3], unixtime[4], unixtime[5], 3, 1))
+    return unixtime
+
+@micropython.native
 def get_next_ring_index(running, progress, current_time):
     r = range(len(running))
     for i in r:
-        unixtime = running[i][0]
+        unixtime = remove_date_from_unixtime(running[i][0])
         if current_time <= unixtime or 0 < current_time - unixtime < int(schedule.get("max_wait")) and not progress >= unixtime:
             return i
     return -1
 
 @micropython.native
-def run():
+def ring_bell(running, idx):
+    params = running[idx][1].split("/", 3)
+    log(running, params)
+    mode = params[0].lower()
+    if mode == "on":
+        switch_on()
+    elif mode == "off":
+        switch_off()
+    elif mode == "timer":
+        on_seconds = float(params[1])
+        timer(on_seconds)
+    elif mode == "repeat":
+        repeat = int(params[1])
+        on_seconds = float(params[2])
+        off_seconds = float(params[3])
+        repeat_timer(repeat, on_seconds, off_seconds)
+
+@micropython.native
+async def run():
     while True:
         try:
             await sleep(0.1)
             active = schedule.get("active")
-            running = schedule.get("schedules").get(active)
-            running = sorted(running, key=lambda x: x[0])
-            current_time = time()
+            running = sorted(schedule.get("schedules").get(active), key=lambda x: x[0])
+
+            current_time_with_date = time()
+            current_time = remove_date_from_unixtime(current_time_with_date)
+
+            if schedule.get("is_complete") and current_time_with_date - schedule.get("completed_on") > int(schedule.get("max_wait")):
+                log("reset schedule")
+                schedule.set("is_complete", False)
+                schedule.set("progress", -1)
+
             progress = schedule.get("progress")
+            if progress >= 0: progress = remove_date_from_unixtime(progress)
+
             idx = get_next_ring_index(running, progress, current_time)
-            next_ring = running[idx][0]
+            next_ring = remove_date_from_unixtime(running[idx][0])
             has_rang = progress >= next_ring
+
             if current_time == next_ring or (0 < current_time - next_ring < int(schedule.get("max_wait"))) and not has_rang:
-                params = running[idx][1].split("/", 3)
-                log(running, current_time, params)
-                mode = params[0].lower()
-                if mode == "on":
-                    switch_on()
-                    schedule.set("progress", next_ring)
-                elif mode == "off":
-                    switch_off()
-                    schedule.set("progress", next_ring)
-                elif mode == "timer":
-                    on_seconds = float(params[1])
-                    timer(on_seconds)
-                    schedule.set("progress", next_ring)
-                elif mode == "repeat":
-                    repeat = int(params[1])
-                    on_seconds = float(params[2])
-                    off_seconds = float(params[3])
-                    repeat_timer(repeat, on_seconds, off_seconds)
-                    schedule.set("progress", next_ring)
+                ring_bell(running, idx)
+                schedule.set("progress", next_ring)
+                if running[idx] == running[-1]:
+                    log("completed schedule")
+                    schedule.set("is_complete", True)
+                    schedule.set("completed_on", current_time_with_date)
             elif current_time < next_ring:
                 await sleep(next_ring - current_time)
             else:
                 await sleep(50)
         except Exception as err:
-            log(str(err))
-            
+            log(err)
