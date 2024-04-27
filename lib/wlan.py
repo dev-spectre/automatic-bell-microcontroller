@@ -124,7 +124,7 @@ def register_ip():
             "key": key,
             "ip": ip
             })
-        res = post(f"config.get('backend_api')/device", headers=header, data=payload).json()
+        res = post(f"{config.get('backend_api')}/device", headers=header, data=payload).json()
         if res.get("success"):
             env.set("ip", ip)
             env.set("jwt", f"Bearer {res['data'].get('jwt')}")
@@ -141,7 +141,7 @@ def register_ip():
             "key": env.get("key"),
             "ip": ip
             })
-        res = put(f"config.get('backend_api')/device", headers=header, data=payload).json()
+        res = put(f"{config.get('backend_api')}/device", headers=header, data=payload).json()
         if res.get("success"):
             log("IP changed on database", ip)
             return env.set("ip", ip)
