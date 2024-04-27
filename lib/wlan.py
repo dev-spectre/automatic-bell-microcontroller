@@ -84,31 +84,30 @@ def scan_and_connect():
 
 def connect_to_wlan():
     from error import NoAccessPointFound, WrongPassword, ConnectionFailed
-    
+
     wlan_credentials = config.get("wlan_credentials")
     print(wlan_credentials)
-    if not wlan_credentials:
-        ssid, password, ip = scan_and_connect()
-        config.set("wlan_credentials", [{ "ssid": ssid, "password": password}])
-        log(f"Connection IP: {ip}")
-        return config.set("ip", ip)
-        
-    conn = None
-    for wlan_cred in wlan_credentials:
-        if wlan.isconnected():
-          ip = get_ip()
-          log(f"Connection IP: {ip}")
-          return config.set("ip", ip)
+    if wlan_credentials:
+        for wlan_cred in wlan_credentials:
+            if wlan.isconnected():
+              ip = get_ip()
+              log(f"Connection IP: {ip}")
+              return config.set("ip", ip)
 
-        try:
-          ssid = wlan_cred.get("ssid")
-          password = wlan_cred.get("password")
-          ip = connect(ssid, password)
-          log(f"Connection IP: {ip}")
-          return config.set("ip", ip)
-        except (NoAccessPointFound, WrongPassword):
-            continue
-        
+            try:
+              ssid = wlan_cred.get("ssid")
+              password = wlan_cred.get("password")
+              ip = connect(ssid, password)
+              log(f"Connection IP: {ip}")
+              return config.set("ip", ip)
+            except (NoAccessPointFound, WrongPassword):
+                continue
+
+    ssid, password, ip = scan_and_connect()
+    config.set("wlan_credentials", [{ "ssid": ssid, "password": password}])
+    log(f"Connection IP: {ip}")
+    return config.set("ip", ip)
+
 def register_ip():
     from config import JSON
     from ujson import dumps
