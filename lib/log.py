@@ -2,9 +2,12 @@ from config import config
 from clock import get_time
 from os import stat
 
-def log(*msg):
+def log(*msg, function_name=""):
     file_path = config.get("log") or "/log.txt"
-    line = f"[{get_time()}]: "
+    line = f"[{get_time()}]"
+    if function_name != "":
+        line += f" ({function_name})"
+    line += ":";
     for i in msg:
         i = str(i)
         line += f" {i}"

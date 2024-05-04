@@ -63,16 +63,14 @@ async def run():
             next_ring = remove_date_from_unixtime(running[idx][0])
             has_rang = progress >= next_ring
 
-            if current_time == next_ring or (0 < current_time - next_ring < int(schedule.get("max_wait"))) and not has_rang:
+            if (current_time == next_ring or (0 < current_time - next_ring < int(schedule.get("max_wait"))) and not has_rang) and schedule.get("last_ring") + schedule.get("gap") < current_time:
                 ring_bell(running, idx)
-                schedule.set("progress", next_ring)
-                if running[idx] == running[-1]:
-                    log("completed schedule")
-                    schedule.set("is_complete", True)
-                    schedule.set("completed_on", current_time_with_date)
+                save_progress(running, idx, current_time_with_date, next_ring)
             elif current_time < next_ring:
                 await sleep(next_ring - current_time)
+            elif schedule.get("last_ring") + schedule.get("gap") >= current_time:
+                await sleep(schedule.get("last_ring") + schedule.get("gap") - current_time)
             else:
                 await sleep(50)
         except Exception as err:
-            log(err)
+            log(err, function_name = "schedule.run")
