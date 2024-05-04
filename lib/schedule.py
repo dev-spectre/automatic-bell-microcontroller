@@ -49,20 +49,33 @@ def ring_bell(running, idx):
         repeat_timer(repeat, on_seconds, off_seconds)
 
 @micropython.native
+def save_progress(running, idx, current_time_with_date, next_ring):
+    schedule.set("progress", next_ring)
+    schedule.set("last_ring", remove_date_from_unixtime(time()))
+    if running[idx] is running[-1]:
+        log("completed schedule")
+        schedule.set("is_complete", True)
+        schedule.set("completed_on", current_time_with_date)
+
+@micropython.native
+def reset_progress(current_time_with_date):
+    if schedule.get("is_complete") and current_time_with_date - schedule.get("completed_on") > int(schedule.get("max_wait")):
+        log("reset schedule")
+        schedule.set("is_complete", False)
+        schedule.set("progress", -1)
+        schedule.set("last_ring", schedule.get("gap") * -1)
+
+@micropython.native
 async def run():
     while True:
         try:
             await sleep(0.1)
-            active = schedule.get("active")
-            running = sorted(schedule.get("schedules").get(active), key=lambda x: x[0])
+            running = get_active_schedule()
 
             current_time_with_date = time()
             current_time = remove_date_from_unixtime(current_time_with_date)
 
-            if schedule.get("is_complete") and current_time_with_date - schedule.get("completed_on") > int(schedule.get("max_wait")):
-                log("reset schedule")
-                schedule.set("is_complete", False)
-                schedule.set("progress", -1)
+            reset_progress(current_time_with_date)
 
             progress = schedule.get("progress")
             if progress >= 0: progress = remove_date_from_unixtime(progress)
