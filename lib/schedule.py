@@ -22,18 +22,29 @@ def remove_date_from_unixtime(unixtime):
     return unixtime
 
 @micropython.native
+def get_active_schedule():
+    active_schedule_names = schedule.get("active")
+    schedules = schedule.get("schedules")
+    active_schedule = {}
+    for i in active_schedule_names:
+        active_schedule.update(schedules.get(i))
+    active_schedule = list(active_schedule.items())
+    return sorted(active_schedule, key=lambda x: x[0])
+
+@micropython.native
 def get_next_ring_index(running, progress, current_time):
     r = range(len(running))
     for i in r:
         unixtime = remove_date_from_unixtime(running[i][0])
-        if current_time <= unixtime or 0 < current_time - unixtime < int(schedule.get("max_wait")) and not progress >= unixtime:
+        has_rang = progress >= unixtime
+        if current_time <= unixtime or 0 < current_time - unixtime < int(schedule.get("max_wait")) and not has_rang:
             return i
     return -1
 
 @micropython.native
 def ring_bell(running, idx):
     params = running[idx][1].split("/", 3)
-    log(running, params)
+    log(running, params, idx)
     mode = params[0].lower()
     if mode == "on":
         switch_on()
