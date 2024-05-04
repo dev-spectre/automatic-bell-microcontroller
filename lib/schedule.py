@@ -7,6 +7,14 @@ from asyncio import sleep
 schedule = JSON("/schedule.json")
 
 @micropython.native
+def all_schedule_exists(*schedule_list):
+    schedules = schedule.get("schedules")
+    if len(schedule_list) > len(schedules): return False
+    for i in schedule_list:
+        if i not in schedules: return False
+    return True
+
+@micropython.native
 def remove_date_from_unixtime(unixtime):
     if 0 <= unixtime < 86400: return unixtime
     unixtime = localtime(unixtime)

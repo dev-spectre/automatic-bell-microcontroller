@@ -1,17 +1,17 @@
 from microdot import Microdot, redirect
-from schedule import schedule
+from schedule import schedule, all_schedule_exists
 from config import JSON, config
+from log import log
 
 app = Microdot()
 env = JSON("/.env.json")
 
 @app.before_request
 async def authenticate(request):
-    if request.path in ["/signin", "/res"]: return None
+    if request.path in ["/", "/signin", "/res"]: return None
     jwt = request.headers.get("Authorization")
     userkey = env.get("userkey") 
     if jwt != userkey:
-        print(jwt, userkey)
         return {
             "success": False,
             "msg": "Invalid JWT"
@@ -183,7 +183,7 @@ async def delete_schedule(request):
     deleted = {}
     active = schedule.get("active")
     for key in schedules_to_delete:
-        if key == active or key not in schedules: continue
+        if key in active or key not in schedules: continue
         deleted[key] = schedules.pop(key)
     schedule.set("schedules", schedules)
     return {
@@ -195,7 +195,7 @@ async def delete_schedule(request):
 async def create_schedule(request):
     schedules_to_add = request.json.get("schedules")
     
-    if not schedules_to_delete:
+    if not schedules_to_add:
         return {
             "success": False,
             "msg": "No schedules given to add/update",
@@ -204,6 +204,8 @@ async def create_schedule(request):
     schedules = schedule.get("schedules")
     added = {}
     for key in schedules_to_add:
+        if request.method == "POST" and schedules.get(key):
+            continue
         schedules[key] = schedules_to_add[key]
         added[key] = schedules_to_add[key]
     schedule.set("schedules", schedules)
@@ -220,10 +222,9 @@ async def get_active_schedule(request):
         }, 200
 
 @app.put("/active")
-async def update_active_schedule(request):
+async def set_active_schedule(request):
     active = request.json.get("active")
-    schedules = schedule.get("schedules")
-    if active not in schedules:
+    if not all_schedule_exists(*active):
         return {
             "success": False,
             "msg": "Schedule doesn't exists",
@@ -232,7 +233,6 @@ async def update_active_schedule(request):
     schedule.set("active", active)
     return {
         "success": True,
-        "msg": f"{active} is now active schedule",
         "data": {
             "active": active,
             },
@@ -274,26 +274,26 @@ async def not_found(request):
 
 @app.errorhandler(OSError)
 def os_error(request, exception):
+    log(exception)
     return {
         "success": False,
         "msg": "OS Error",
-        "err": exception,
         }, 500
 
 @app.errorhandler(RuntimeError)
 def runtime_error(request, exception):
+    log(exception)
     return {
         "success": False,
         "msg": "Runtime error",
-        "err": exception,
         }, 500
 
 @app.errorhandler(Exception)
 def unkown_error(request, exception):
+    log(exception)
     return {
         "success": False,
         "msg": "Unkown error",
-        "err": exception
         }, 500
 
 if __name__ == "__main__":
