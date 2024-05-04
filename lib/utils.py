@@ -1,5 +1,6 @@
 from log import log
 
+@micropython.native
 def try_till_success(function, err_msg="", max_try = -1, should_reset = False):
     from gc import collect
     
