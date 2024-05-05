@@ -74,6 +74,16 @@ def save_progress(running, idx, current_time_with_date, next_ring):
         log("completed schedule")
         schedule.set("is_complete", True)
         schedule.set("completed_on", current_time_with_date)
+        active_schedules = schedule.get("active")
+        once = schedule.get("once")
+        i = 0
+        while i < len(active_schedules):
+            if active_schedules[i] in once:
+                once.pop(active_schedules[i])
+                schedule.set("once", once)
+                active_schedules.pop(i)
+            else:
+                i += 1
 
 @micropython.native
 def reset_progress(current_time_with_date):
