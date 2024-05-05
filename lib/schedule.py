@@ -25,9 +25,16 @@ def remove_date_from_unixtime(unixtime):
 def get_active_schedule():
     active_schedule_names = schedule.get("active")
     schedules = schedule.get("schedules")
+    weekly_schedules = schedule.get("weekly")
+    monthly_schedules = schedule.get("monthly")
+    once = schedule.get("once")
     active_schedule = {}
+    year, month, mday, _, _, _, weekday, _ = localtime()
     for i in active_schedule_names:
-        active_schedule.update(schedules.get(i))
+        if i in weekly_schedules[weekday] or \
+           i in (monthly_schedules.get(str(mday)) or []) or \
+           once.get(i) == [year, month, mday]:
+            active_schedule.update(schedules.get(i))
     active_schedule = list(active_schedule.items())
     return sorted(active_schedule, key=lambda x: x[0])
 
@@ -82,6 +89,9 @@ async def run():
         try:
             await sleep(0.1)
             running = get_active_schedule()
+            if running == []:
+                await sleep(50)
+                continue
 
             current_time_with_date = time()
             current_time = remove_date_from_unixtime(current_time_with_date)

@@ -172,30 +172,56 @@ async def get_schedule(request):
 @app.delete("/schedule")
 async def delete_schedule(request):
     schedules_to_delete = request.json.get("keys")
-    
+
     if not schedules_to_delete:
         return {
             "success": False,
             "msg": "No schedules given to delete",
             }, 422
-    
+
     schedules = schedule.get("schedules")
     deleted = {}
     active = schedule.get("active")
+    weekly_schedules = schedule.get("weekly")
+    monthly_schedules = schedule.get("monthly")
+    once = schedule.get("once")
+
     for key in schedules_to_delete:
         if key in active or key not in schedules: continue
+        if key in once: once.pop(key)
+        
+        for weekly_schedule in weekly_schedules:
+            if key in weekly_schedule:
+                weekly_schedule.remove(key)
+
+        for monthly_schedule in monthly_schedules:
+            if key in monthly_schedule:
+                monthly_schedule.remove(key)
+
         deleted[key] = schedules.pop(key)
     schedule.set("schedules", schedules)
+    schedule.set("once", once)
+    schedule.set("monthly", monthly_schedules)
+    schedule.set("weekly", weekly_schedules)
     return {
         "success": True,
         "data": deleted,
         }, 200
 
 @app.route("/schedule", methods=["POST", "PUT"])
-async def create_schedule(request):
-    schedules_to_add = request.json.get("schedules")
+async def set_schedule(request):
+    schedules_update = request.json.get("schedules")
+    weekly_schedules_update = request.json.get("weekly")
+    monthly_schedules_update = request.json.get("monthly")
+    once_update = request.json.get("once")
     
-    if not schedules_to_add:
+    if not weekly_schedules_update and not monthly_schedules_update and not once_update:
+        return {
+            "success": False,
+            "msg": "Missing parameters",
+            }, 422
+    
+    if not schedules_update:
         return {
             "success": False,
             "msg": "No schedules given to add/update",
@@ -203,25 +229,43 @@ async def create_schedule(request):
     
     schedules = schedule.get("schedules")
     added = {}
-    for key in schedules_to_add:
+    for key in schedules_update:
         if request.method == "POST" and schedules.get(key):
             continue
-        schedules[key] = schedules_to_add[key]
-        added[key] = schedules_to_add[key]
+        schedules[key] = schedules_update[key]
+        added[key] = schedules_update[key]
     schedule.set("schedules", schedules)
+
+    if weekly_schedules_update:
+        weekly_schedules = schedule.get("weekly")
+        for i, schedule_list in weekly_schedules_update:
+            if 0 <= int(i) <= 6: weekly_schedules[i] = list(set(weekly_schedules[i].extend(schedule_list)))
+        schedule.set("weekly", weekly_schedules)
+
+    if monthly_schedules_update:
+        monthly_schedules = schedule.get("monthly")
+        for i, schedule_list in monthly_schedules_update:
+            if 0 <= int(i) <= 6: monthly_schedules[i] = list(set(monthly_schedules[i].extend(schedule_list)))
+        schedule.set("monthly", monthly_schedules)
+
+    if once_update:
+        once = schedule.get("once")
+        once.update(once_update)
+        schedule.set("once", once)
+
     return {
         "success": True,
         "data": added,
         }, 201
 
-@app.get("/active")
+@app.get("/schedule/active")
 async def get_active_schedule(request):
     return {
         "success": True,
         "data": schedule.get("active")
         }, 200
 
-@app.put("/active")
+@app.put("/schedule/active")
 async def set_active_schedule(request):
     active = request.json.get("active")
     if not all_schedule_exists(*active):
