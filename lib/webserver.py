@@ -238,14 +238,23 @@ async def set_schedule(request):
 
     if weekly_schedules_update:
         weekly_schedules = schedule.get("weekly")
-        for i, schedule_list in weekly_schedules_update:
-            if 0 <= int(i) <= 6: weekly_schedules[i] = list(set(weekly_schedules[i].extend(schedule_list)))
+        for i, schedule_list in weekly_schedules_update.items():
+            idx = int(i)
+            if 0 <= idx <= 6:
+                weekly_schedules[idx].extend(schedule_list)
+                weekly_schedules[idx] = list(set(weekly_schedules[idx]))
         schedule.set("weekly", weekly_schedules)
 
     if monthly_schedules_update:
         monthly_schedules = schedule.get("monthly")
-        for i, schedule_list in monthly_schedules_update:
-            if 0 <= int(i) <= 6: monthly_schedules[i] = list(set(monthly_schedules[i].extend(schedule_list)))
+        for i, schedule_list in monthly_schedules_update.items():
+            idx = int(i)
+            if not (1 <= idx <= 31): continue
+            if i in monthly_schedules:
+                monthly_schedules[i].extend(schedule_list)
+                monthly_schedules[i] = list(set(monthly_schedules[i]))
+            else:
+                monthly_schedules[i] = list(set(schedule_list))
         schedule.set("monthly", monthly_schedules)
 
     if once_update:
