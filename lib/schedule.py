@@ -49,9 +49,8 @@ def get_next_ring_index(running, progress, current_time):
     return -1
 
 @micropython.native
-def ring_bell(running, idx):
-    params = running[idx][1].split("/", 3)
-    log(running, params, idx)
+def ring_bell(params):
+    params = params.split("/", 3)
     mode = params[0].lower()
     if mode == "on":
         switch_on()
@@ -77,13 +76,20 @@ def save_progress(running, idx, current_time_with_date, next_ring):
         active_schedules = schedule.get("active")
         once = schedule.get("once")
         i = 0
+        weekly_schedules = schedule.get("weekly")
+        monthly_schedules = schedule.get("monthly")
+        weekly_and_monthly = [x for i in weekly_schedules for x in i]
+        monthly = [x for i in monthly_schedules for x in monthly_schedules[i]]
+        weekly_and_monthly.extend(monthly)
         while i < len(active_schedules):
             if active_schedules[i] in once:
                 once.pop(active_schedules[i])
                 schedule.set("once", once)
+            if active_schedules[i] not in weekly_and_monthly:
                 active_schedules.pop(i)
             else:
                 i += 1
+        schedule.set("active", active_schedules)
 
 @micropython.native
 def reset_progress(current_time_with_date):
@@ -116,7 +122,9 @@ async def run():
             has_rang = progress >= next_ring
 
             if (current_time == next_ring or (0 < current_time - next_ring < int(schedule.get("max_wait"))) and not has_rang) and schedule.get("last_ring") + schedule.get("gap") < current_time:
-                ring_bell(running, idx)
+                params = running[idx][1]
+                log(running, params, idx)
+                ring_bell(params)
                 save_progress(running, idx, current_time_with_date, next_ring)
             elif current_time < next_ring:
                 await sleep(next_ring - current_time)
