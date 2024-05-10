@@ -214,8 +214,9 @@ async def set_schedule(request):
     weekly_schedules_update = request.json.get("weekly")
     monthly_schedules_update = request.json.get("monthly")
     once_update = request.json.get("once")
+    force_add = request.json.get("force")
     
-    if not weekly_schedules_update and not monthly_schedules_update and not once_update:
+    if not force_add and not weekly_schedules_update and not monthly_schedules_update and not once_update:
         return {
             "success": False,
             "msg": "Missing parameters",
