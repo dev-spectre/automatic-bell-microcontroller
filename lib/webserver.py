@@ -311,19 +311,19 @@ async def run_schedule(request):
     from time import localtime
     schedule_name = request.json.get("schedule")
     schedules = schedule.get("schedules")
-    print(schedule_name)
+
     if not schedule_name:
         return {
             "success": False,
             "msg": "Missing parameters",
             }, 422
-    
+
     if not schedules.get(schedule_name):
         return {
             "success": False,
             "msg": "Schedule doesn't exist",
             }, 404
-    
+
     active_schedules = schedule.get("active")
     active_schedules.append(schedule_name)
     once = schedule.get("once")
