@@ -283,7 +283,7 @@ async def set_active_schedule(request):
             "success": False,
             "msg": "Schedule doesn't exists",
             }, 404
-    
+
     schedule.set("active", active)
     return {
         "success": True,

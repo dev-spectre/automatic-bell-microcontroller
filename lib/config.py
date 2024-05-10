@@ -1,12 +1,20 @@
 import json
 
 class JSON:
-    def __init__(self, file = "../config.json"):
+    json_data = {}
+
+    def __init__(self, file = "/config.json"):
         self.file = file
+
+        if file in JSON.json_data:
+            self.json = JSON.json_data[file]
+            return
+
         with open(self.file, "r") as f:
             data = json.load(f)
             self.json = data
-    
+            JSON.json_data[file] = data
+
     def save(self):
         try:
             with open(self.file, "w") as f:
