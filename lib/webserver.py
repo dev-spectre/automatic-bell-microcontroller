@@ -1,5 +1,5 @@
 from microdot import Microdot, redirect
-from schedule import schedule, all_schedule_exists
+from schedule import schedule, all_schedule_exists, ring_bell
 from config import JSON, config
 from log import log
 
@@ -289,6 +289,50 @@ async def set_active_schedule(request):
         "data": {
             "active": active,
             },
+        }, 201
+
+@app.post("/bell/ring")
+async def manual_ring(request):
+    from asyncio import get_event_loop
+    mode = request.json.get("mode")
+    if not mode:
+        return {
+            "success": False,
+            "msg": "Couldn't ring bell"
+            }
+    ring_bell(mode)
+    return {
+        "success": True,
+        }, 201
+
+@app.put("/schedule/run")
+async def run_schedule(request):
+    from time import localtime
+    schedule_name = request.json.get("schedule")
+    schedules = schedule.get("schedules")
+    print(schedule_name)
+    if not schedule_name:
+        return {
+            "success": False,
+            "msg": "Missing parameters",
+            }, 422
+    
+    if not schedules.get(schedule_name):
+        return {
+            "success": False,
+            "msg": "Schedule doesn't exist",
+            }, 404
+    
+    active_schedules = schedule.get("active")
+    active_schedules.append(schedule_name)
+    once = schedule.get("once")
+    year, month, mday, _, _, _, _, _ = localtime()
+    once[schedule_name] = [year, month, mday]
+    schedule.set("once", once)
+    schedule.set("active", active_schedules)
+    return {
+        "success": True,
+        "msg": "Schedule added to active schedules"
         }, 201
 
 @app.post("/signin")
