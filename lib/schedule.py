@@ -31,6 +31,7 @@ def get_active_schedule():
     active_schedule = {}
     year, month, mday, _, _, _, weekday, _ = localtime()
     for i in active_schedule_names:
+        if i not in schedules: continue
         if i in weekly_schedules[weekday] or \
            i in (monthly_schedules.get(str(mday)) or []) or \
            once.get(i) == [year, month, mday]:
