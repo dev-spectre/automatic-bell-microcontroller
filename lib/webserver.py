@@ -1,5 +1,6 @@
+from asyncio import sleep
 from microdot import Microdot, redirect
-from schedule import schedule, all_schedule_exists, ring_bell
+from schedule import schedule, all_schedule_exists, ring_bell, is_wild_schedule
 from config import JSON, config
 from log import log
 
@@ -185,10 +186,12 @@ async def delete_schedule(request):
     weekly_schedules = schedule.get("weekly")
     monthly_schedules = schedule.get("monthly")
     once = schedule.get("once")
+    wild_schedules = schedule.get("wild_schedules")
 
     for key in schedules_to_delete:
         if key in active or key not in schedules: continue
         if key in once: once.pop(key)
+        if key in wild_schedules: wild_schedules.remove(key)
         
         for weekly_schedule in weekly_schedules:
             if key in weekly_schedule:
@@ -235,6 +238,12 @@ async def set_schedule(request):
             continue
         schedules[key] = schedules_update[key]
         added[key] = schedules_update[key]
+
+        wild_schedules = schedule.get("wild_schedules")
+        if is_wild_schedule(key) and key not in wild_schedules: 
+            wild_schedules.append(key)
+            schedule.set("wild_schedules", wild_schedules)
+            
     schedule.set("schedules", schedules)
 
     if weekly_schedules_update:
@@ -308,7 +317,7 @@ async def manual_ring(request):
 
 @app.put("/schedule/run")
 async def run_schedule(request):
-    from time import localtime
+    from time import localtime, time
     schedule_name = request.json.get("schedule")
     schedules = schedule.get("schedules")
 
@@ -323,14 +332,27 @@ async def run_schedule(request):
             "success": False,
             "msg": "Schedule doesn't exist",
             }, 404
+    
+    if is_wild_schedule(schedule_name):
+        wild_schedule = schedules.get(schedule_name)
+
+        prev_time = time()
+        wild_schedule[0][0] = prev_time
+        r = range(1, len(wild_schedule))
+        for i in r:
+            gap = int(wild_schedule[i][0][1:])
+            prev_time += gap
+            wild_schedule[i][0] = prev_time
+        schedule.set("schedules", schedules)
 
     active_schedules = schedule.get("active")
-    active_schedules.append(schedule_name)
+    if active_schedules == [] or active_schedules[-1] != schedule_name: active_schedules.append(schedule_name)
     once = schedule.get("once")
     year, month, mday, _, _, _, _, _ = localtime()
     once[schedule_name] = [year, month, mday]
     schedule.set("once", once)
     schedule.set("active", active_schedules)
+    await sleep(0.5)
     return {
         "success": True,
         "msg": "Schedule added to active schedules"

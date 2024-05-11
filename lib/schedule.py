@@ -7,6 +7,13 @@ from asyncio import sleep
 schedule = JSON("/schedule.json")
 
 @micropython.native
+def is_wild_schedule(schedule_name, strict=True):
+    wild_schedule = schedule.get("schedules").get(schedule_name)
+    if len(wild_schedule) == 0 or len(wild_schedule[0]) != 2: return False
+    wild_schedules = schedule.get("wild_schedules")
+    return wild_schedule[0][0] == "*" or not strict and schedule_name in wild_schedules
+
+@micropython.native
 def all_schedule_exists(*schedule_list):
     schedules = schedule.get("schedules")
     if len(schedule_list) > len(schedules): return False
@@ -35,7 +42,7 @@ def get_active_schedule():
         if i in weekly_schedules[weekday] or \
            i in (monthly_schedules.get(str(mday)) or []) or \
            once.get(i) == [year, month, mday]:
-            active_schedule.update(schedules.get(i))
+            if not is_wild_schedule(i): active_schedule.update(schedules.get(i))
     active_schedule = list(active_schedule.items())
     return sorted(active_schedule, key=lambda x: x[0])
 
@@ -77,12 +84,23 @@ def save_progress(running, idx, current_time_with_date, next_ring):
         active_schedules = schedule.get("active")
         once = schedule.get("once")
         i = 0
+        wild_schedules = schedule.get("wild_schedules")
         weekly_schedules = schedule.get("weekly")
         monthly_schedules = schedule.get("monthly")
         weekly_and_monthly = [x for i in weekly_schedules for x in i]
         monthly = [x for i in monthly_schedules for x in monthly_schedules[i]]
         weekly_and_monthly.extend(monthly)
         while i < len(active_schedules):
+            if active_schedules[i] in wild_schedules:
+                schedules = schedule.get("schedules")
+                wild_schedule = schedules.get(active_schedules[i])
+                if wild_schedule[0][0] == "*": continue
+                r = range(len(wild_schedule)-1, 0, -1)
+                for j in r:
+                    gap = f"+{wild_schedule[j][0] - wild_schedule[j-1][0]}"
+                    wild_schedule[j][0] = gap
+                wild_schedule[0][0] = "*"
+                schedule.set("schedules", schedules)
             if active_schedules[i] in once:
                 once.pop(active_schedules[i])
                 schedule.set("once", once)
@@ -107,7 +125,7 @@ async def run():
             await sleep(0.1)
             running = get_active_schedule()
             if running == []:
-                await sleep(50)
+                await sleep(1)
                 continue
 
             current_time_with_date = time()
@@ -132,6 +150,7 @@ async def run():
             elif schedule.get("last_ring") + schedule.get("gap") >= current_time:
                 await sleep(schedule.get("last_ring") + schedule.get("gap") - current_time)
             else:
-                await sleep(50)
+                await sleep(10)
         except Exception as err:
+            await sleep(1)
             log(err, function_name = "schedule.run")
