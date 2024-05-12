@@ -301,6 +301,54 @@ async def set_active_schedule(request):
             },
         }, 201
 
+@app.put("/schedule/gap")
+async def set_schedule_gap(request):
+    gap = request.json.get("gap")
+    if not gap:
+        return {
+            "success": False,
+            "msg": "Missing parameters"
+            }, 422
+    
+    if type(0) != type(gap) or not 0 <= gap <= 60:
+        return {
+            "success": False,
+            "msg": "Invalid input",
+            }
+    
+    schedule.set("gap", gap)
+    return {
+        "success": True,
+        "msg": f"Schedule gap set to {gap} second(s)",
+        "data": {
+            "gap": gap,
+            },
+        }, 201
+
+@app.put("/schedule/wait")
+async def set_schedule_max_wait(request):
+    max_wait = request.json.get("wait")
+    if not max_wait:
+        return {
+            "success": False,
+            "msg": "Missing parameters"
+            }, 422
+    
+    if type(0) != type(max_wait) or not 20 <= max_wait <= 300:
+        return {
+            "success": False,
+            "msg": "Invalid input",
+            }
+    
+    schedule.set("max_wait", max_wait)
+    return {
+        "success": True,
+        "msg": f"Schedule max_wait set to {max_wait} second(s)",
+        "data": {
+            "wait": max_wait,
+            },
+        }, 201
+
 @app.post("/bell/ring")
 async def manual_ring(request):
     from asyncio import get_event_loop
