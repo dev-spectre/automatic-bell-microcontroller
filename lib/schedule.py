@@ -41,14 +41,25 @@ def get_active_schedule():
         if i not in schedules: continue
         if i in weekly_schedules[weekday] or \
            i in (monthly_schedules.get(str(mday)) or []) or \
-           once.get(i) == [year, month, mday]:
+           i in once and once.get(i) <= [year, month, mday]:
             if not is_wild_schedule(i): active_schedule.update(schedules.get(i))
     active_schedule = list(active_schedule.items())
     return sorted(active_schedule, key=lambda x: x[0])
 
 @micropython.native
 def get_next_ring_index(running, progress, current_time):
-    r = range(len(running))
+    start_idx = 0
+    midnight_reset_count = schedule.get("midnight_reset_count")
+    if midnight_reset_count > 0:
+        r = range(1, len(running))
+        for i in r:
+            prev_time = remove_date_from_unixtime(running[i-1][0])
+            next_time = remove_date_from_unixtime(running[i][0])
+            if prev_time > next_time:
+                start_idx = i
+                midnight_reset_count -= 1
+                if midnight_reset_count <= 0: break
+    r = range(start_idx, len(running))
     for i in r:
         unixtime = remove_date_from_unixtime(running[i][0])
         has_rang = progress >= unixtime
@@ -81,6 +92,7 @@ def save_progress(running, idx, current_time_with_date, next_ring):
         log("completed schedule")
         schedule.set("is_complete", True)
         schedule.set("completed_on", current_time_with_date)
+        schedule.set("midnight_reset_count", 0)
         active_schedules = schedule.get("active")
         once = schedule.get("once")
         i = 0
@@ -112,11 +124,16 @@ def save_progress(running, idx, current_time_with_date, next_ring):
 
 @micropython.native
 def reset_progress(current_time_with_date):
+    if schedule.get("progress") > remove_date_from_unixtime(current_time_with_date):
+        midnight_reset_count = schedule.get("midnight_reset_count")
+        schedule.set("midnight_reset_count", midnight_reset_count + 1)
+        schedule.set("progress", 0)
+        schedule.set("last_ring", schedule.get("gap") * -1)
     if schedule.get("is_complete") and current_time_with_date - schedule.get("completed_on") > int(schedule.get("max_wait")):
         log("reset schedule")
         schedule.set("is_complete", False)
-        schedule.set("progress", -1)
         schedule.set("last_ring", schedule.get("gap") * -1)
+        schedule.set("progress", -1)
 
 @micropython.native
 async def run():
@@ -124,15 +141,16 @@ async def run():
         try:
             await sleep(0.1)
             running = get_active_schedule()
-            if running == []:
-                await sleep(1)
-                continue
 
             current_time_with_date = time()
             current_time = remove_date_from_unixtime(current_time_with_date)
 
             reset_progress(current_time_with_date)
-
+            
+            if running == []:
+                await sleep(1)
+                continue
+            
             progress = schedule.get("progress")
             if progress >= 0: progress = remove_date_from_unixtime(progress)
 
