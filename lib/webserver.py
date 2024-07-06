@@ -11,7 +11,7 @@ cors = CORS(app, allowed_origins="*", allow_credentials=True)
 
 @app.before_request
 async def authenticate(request):
-    if request.path in ["/", "/signup", "/signin", "/res"]: return None
+    if request.path in ["/", "/signup", "/signin", "/res", "/password/reset"]: return None
     jwt = request.headers.get("Authorization")
     userkey = env.get("userkey") 
     if jwt != userkey:
@@ -473,6 +473,30 @@ async def signin(request):
     return {
         "success": True,
         }
+
+@app.put("/password/reset")
+async def reset_password(request):
+    from urequests import put
+    from json import dumps
+ 
+    if request.json.get("key") != env.get("key"):
+        return {
+            "success": False,
+            "msg": "Invalid key",
+            }
+
+    payload = dumps({
+        "username": request.json.get("username"),
+        "password": request.json.get("password"),
+        "key": request.json.get("key"),
+        })
+    res = put(f"{config.get('backend_api')}/user/password/reset", headers={
+        "Content-Type": "application/json",
+        "Authorization": env.get("jwt"),
+        }, data=payload
+        ).json()
+    
+    return res
 
 @app.errorhandler(413)
 async def max_req_length(request):
