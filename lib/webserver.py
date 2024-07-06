@@ -42,7 +42,7 @@ async def set_time(request):
     if not unixtime:
         return { "success": False }
     
-    sync_from_unixtime(unixtime + config.get("time_fetch_offset"))
+    sync_from_unixtime(unixtime)
     
     return {
         "success": True,
