@@ -1,15 +1,17 @@
 from asyncio import sleep
 from microdot import Microdot, redirect
+from microdot.cors import CORS
 from schedule import schedule, all_schedule_exists, ring_bell, is_wild_schedule
 from config import JSON, config
 from log import log
 
 app = Microdot()
 env = JSON("/.env.json")
+cors = CORS(app, allowed_origins="*", allow_credentials=True)
 
 @app.before_request
 async def authenticate(request):
-    if request.path in ["/", "/signin", "/res"]: return None
+    if request.path in ["/", "/signup", "/signin", "/res"]: return None
     jwt = request.headers.get("Authorization")
     userkey = env.get("userkey") 
     if jwt != userkey:
@@ -405,6 +407,53 @@ async def run_schedule(request):
         "success": True,
         "msg": "Schedule added to active schedules"
         }, 201
+
+@app.post("/signup")
+async def signup(request):
+    from urequests import post, put
+    from json import dumps, loads
+    
+    key = request.json.get("key")
+    username = request.json.get("username")
+    password = request.json.get("password")
+    
+    if key != env.get("key"):
+        return {
+            "success": False,
+            "msg": "Invalid key",
+            }
+    
+    payload = dumps({
+        "username": username,
+        "password": password,
+        })
+
+    user_response = post(f"{config.get('backend_api')}/user/signup", headers={
+        "Content-Type": "application/json",
+        "Authorization": env.get("jwt"),
+        }, data=payload
+        ).json()
+    
+    if not user_response.get("success"):
+        return user_response
+    
+    payload = dumps({
+            "deviceId": request.json.get("id"),
+            "userId": user_response.get("data").get("id"),
+        })
+    res = put(f"{config.get('backend_api')}/device/assign", headers={
+        "Content-Type": "application/json",
+        "Authorization": env.get("jwt"),
+        }, data=payload
+        ).json()
+    return {
+        "success": True,
+        "data": {
+            "id": res.get("data").get("userId"),
+            "ip": res.get("data").get("ip"),
+            "deviceId": res.get("data").get("id"),
+            }
+        }
 
 @app.post("/signin")
 async def signin(request):
