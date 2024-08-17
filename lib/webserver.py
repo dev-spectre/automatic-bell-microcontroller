@@ -3,6 +3,7 @@ from microdot import Microdot, redirect
 from microdot.cors import CORS
 from schedule import schedule, all_schedule_exists, ring_bell, is_wild_schedule
 from config import JSON, config
+from clock import get_date
 from log import log
 
 app = Microdot()
@@ -175,6 +176,7 @@ async def get_schedule(request):
 @app.delete("/schedule")
 async def delete_schedule(request):
     schedules_to_delete = request.json.get("keys")
+    force = request.json.get("force")
 
     if not schedules_to_delete:
         return {
@@ -188,20 +190,34 @@ async def delete_schedule(request):
     weekly_schedules = schedule.get("weekly")
     monthly_schedules = schedule.get("monthly")
     once = schedule.get("once")
+    skip = schedule.get("skip")
     wild_schedules = schedule.get("wild_schedules")
 
     for key in schedules_to_delete:
-        if key in active or key not in schedules: continue
-        if key in once: once.pop(key)
+        if key in active and not force or key not in schedules: continue
         if key in wild_schedules: wild_schedules.remove(key)
+        
+        if key in active:
+            active.remove(key)
+            
+        for date in list(once.keys()):
+            if key in once[date]:
+                once[date].remove(key)
+            if not once[date]: once.pop(date)
+
+        for date in list(skip.keys()):
+            if key in skip[date]:
+                skip[date].remove(key)
+            if not skip[date]: skip.pop(date)
         
         for weekly_schedule in weekly_schedules:
             if key in weekly_schedule:
                 weekly_schedule.remove(key)
 
-        for monthly_schedule in monthly_schedules:
-            if key in monthly_schedule:
-                monthly_schedule.remove(key)
+        for date in list(monthly_schedules.keys()):
+            if key in monthly_schedules[date]:
+                monthly_schedules[date].remove(key)
+            if not monthly_schedules[date]: monthly_schedules.pop(date)
 
         deleted[key] = schedules.pop(key)
     schedule.set("schedules", schedules)
@@ -216,10 +232,12 @@ async def delete_schedule(request):
 @app.route("/schedule", methods=["POST", "PUT"])
 async def set_schedule(request):
     schedules_update = request.json.get("schedules")
-    weekly_schedules_update = request.json.get("weekly")
-    monthly_schedules_update = request.json.get("monthly")
-    once_update = request.json.get("once")
+    weekly_schedules_update = request.json.get("weekly") or {}
+    monthly_schedules_update = request.json.get("monthly") or {}
+    once_update = request.json.get("once") or {}
     force_add = request.json.get("force")
+    is_assign_only = request.json.get("isAssignOnly")
+    remove_existing = request.json.get("removeExisting")
     
     if not force_add and not weekly_schedules_update and not monthly_schedules_update and not once_update:
         return {
@@ -227,26 +245,59 @@ async def set_schedule(request):
             "msg": "Missing parameters",
             }, 422
     
-    if not schedules_update:
+    if not is_assign_only and not schedules_update:
         return {
             "success": False,
             "msg": "No schedules given to add/update",
             }, 422
-    
-    schedules = schedule.get("schedules")
-    added = {}
-    for key in schedules_update:
-        if request.method == "POST" and schedules.get(key):
-            continue
-        schedules[key] = schedules_update[key]
-        added[key] = schedules_update[key]
 
-        wild_schedules = schedule.get("wild_schedules")
-        if is_wild_schedule(key) and key not in wild_schedules: 
-            wild_schedules.append(key)
-            schedule.set("wild_schedules", wild_schedules)
-            
-    schedule.set("schedules", schedules)
+    added = {}
+    if not is_assign_only:
+        schedules = schedule.get("schedules")
+        for key in schedules_update:
+            if request.method == "POST" and schedules.get(key):
+                continue
+            schedules[key] = schedules_update[key]
+            added[key] = schedules_update[key]
+
+            wild_schedules = schedule.get("wild_schedules")
+            if is_wild_schedule(key) and key not in wild_schedules: 
+                wild_schedules.append(key)
+                schedule.set("wild_schedules", wild_schedules)
+                
+        schedule.set("schedules", schedules)
+
+    if remove_existing:
+        once = schedule.get("once")
+        weekly_schedules = schedule.get("weekly")
+        monthly_schedules = schedule.get("monthly")
+        schedules_to_remove = set()
+        
+        for i in weekly_schedules_update:
+            schedules_to_remove.update(weekly_schedules_update[i])
+
+        for i in monthly_schedules_update:
+            schedules_to_remove.update(monthly_schedules_update[i])
+
+        for i in once_update:
+            schedules_to_remove.update(once_update[i])
+
+        for day_schedules in weekly_schedules:
+            for i in schedules_to_remove:
+                if i in day_schedules:
+                    day_schedules.remove(i)
+
+        for i in list(monthly_schedules.keys()):
+            for j in schedules_to_remove:
+                if j in monthly_schedules[i]:
+                    monthly_schedules[i].remove(j)
+            if not monthly_schedules[i]: monthly_schedules.pop(i)
+
+        for i in list(once.keys()):
+            for j in schedules_to_remove:
+                if j in once[i]:
+                    once[i].remove(j)
+            if not once[i]: once.pop(i)
 
     if weekly_schedules_update:
         weekly_schedules = schedule.get("weekly")
@@ -271,7 +322,12 @@ async def set_schedule(request):
 
     if once_update:
         once = schedule.get("once")
-        once.update(once_update)
+        for i in once_update:
+            if i not in once:
+                once[i] = once_update[i] or []
+                continue
+            once[i].extend(once_update[i])
+            once[i] = list(set(once[i]))
         schedule.set("once", once)
 
     return {
@@ -300,6 +356,33 @@ async def set_active_schedule(request):
         "success": True,
         "data": {
             "active": active,
+            },
+        }, 201
+
+@app.get("/schedule/skip")
+async def get_active_schedule(request):
+    return {
+        "success": True,
+        "data": schedule.get("skip")
+        }, 200
+
+@app.put("/schedule/skip")
+async def set_active_schedule(request):
+    skip_update = request.json.get("skip")
+    if not skip_update:
+        return {
+            "success": False,
+            "msg": "Missing parameters",
+            }, 404
+
+    skip = schedule.get("skip")
+    skip.update(skip_update)
+    schedule.set("skip", skip)
+    
+    return {
+        "success": True,
+        "data": {
+            "skip": skip,
             },
         }, 201
 
@@ -353,7 +436,6 @@ async def set_schedule_max_wait(request):
 
 @app.post("/bell/ring")
 async def manual_ring(request):
-    from asyncio import get_event_loop
     mode = request.json.get("mode")
     if not mode:
         return {
@@ -367,7 +449,7 @@ async def manual_ring(request):
 
 @app.put("/schedule/run")
 async def run_schedule(request):
-    from time import localtime, time
+    from time import time
     schedule_name = request.json.get("schedule")
     schedules = schedule.get("schedules")
 
@@ -398,8 +480,8 @@ async def run_schedule(request):
     active_schedules = schedule.get("active")
     if active_schedules == [] or active_schedules[-1] != schedule_name: active_schedules.append(schedule_name)
     once = schedule.get("once")
-    year, month, mday, _, _, _, _, _ = localtime()
-    once[schedule_name] = [year, month, mday]
+    date = get_date()
+    once[date] = once.get(date) or [schedule_name]
     schedule.set("once", once)
     schedule.set("active", active_schedules)
     await sleep(0.5)
@@ -411,7 +493,7 @@ async def run_schedule(request):
 @app.post("/signup")
 async def signup(request):
     from urequests import post, put
-    from json import dumps, loads
+    from json import dumps
     
     key = request.json.get("key")
     username = request.json.get("username")

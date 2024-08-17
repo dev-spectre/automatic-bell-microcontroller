@@ -3,6 +3,7 @@ from config import JSON
 from log import log
 from time import mktime, localtime, time
 from asyncio import sleep
+from clock import is_synced as time_is_synced, get_date
 
 schedule = JSON("/schedule.json")
 
@@ -22,6 +23,34 @@ def all_schedule_exists(*schedule_list):
     return True
 
 @micropython.native
+def remove_non_existent_schedules():
+    weekly_schedules = schedule.get("weekly")
+    monthly_schedules = schedule.get("monthly")
+    once = schedule.get("once")
+    wild_schedules = schedule.get("wild_schedules")
+    skip = schedule.get("skip")
+    active = schedule.get("active")
+    schedules = schedule.get("schedules")
+
+    for i in range(len(weekly_schedules)):
+        weekly_schedules[i] = [j for j in weekly_schedules[i] if j in schedules]
+
+    for key in list(once.keys()):
+        once[key] = [i for i in once[key] if i in schedules]
+        if not once[key]: once.pop(key)
+
+    for key in list(skip.keys()):
+        skip[key] = [i for i in skip[key] if i in schedules]
+        if not skip[key]: skip.pop(key)
+  
+    for key in list(monthly_schedules.keys()):
+        monthly_schedules[key] = [i for i in monthly_schedules[key] if i in schedules]
+        if not monthly_schedules[key]: monthly_schedules.pop(key)
+
+    schedule.set("active", [i for i in active if i in schedules])
+    schedule.set("wild_schedules", [i for i in wild_schedules if i in schedules])
+    
+@micropython.native
 def remove_date_from_unixtime(unixtime):
     if 0 <= unixtime < 86400: return unixtime
     unixtime = localtime(unixtime)
@@ -34,14 +63,15 @@ def get_active_schedule():
     schedules = schedule.get("schedules")
     weekly_schedules = schedule.get("weekly")
     monthly_schedules = schedule.get("monthly")
-    once = schedule.get("once")
+    once = schedule.get("once").get(get_date()) or []
+    skip = schedule.get("skip").get(get_date()) or {}
     active_schedule = {}
-    year, month, mday, _, _, _, weekday, _ = localtime()
+    _, _, mday, _, _, _, weekday, _ = localtime()
     for i in active_schedule_names:
-        if i not in schedules: continue
+        if i not in schedules or i in skip: continue
         if i in weekly_schedules[weekday] or \
            i in (monthly_schedules.get(str(mday)) or []) or \
-           i in once and once.get(i) <= [year, month, mday]:
+           i in once:
             if not is_wild_schedule(i): active_schedule.update(schedules.get(i))
     active_schedule = list(active_schedule.items())
     return sorted(active_schedule, key=lambda x: x[0])
@@ -102,6 +132,7 @@ def save_progress(running, idx, current_time_with_date, next_ring):
         weekly_and_monthly = [x for i in weekly_schedules for x in i]
         monthly = [x for i in monthly_schedules for x in monthly_schedules[i]]
         weekly_and_monthly.extend(monthly)
+        date = get_date()
         while i < len(active_schedules):
             if active_schedules[i] in wild_schedules:
                 schedules = schedule.get("schedules")
@@ -113,14 +144,16 @@ def save_progress(running, idx, current_time_with_date, next_ring):
                     wild_schedule[j][0] = gap
                 wild_schedule[0][0] = "*"
                 schedule.set("schedules", schedules)
-            if active_schedules[i] in once:
-                once.pop(active_schedules[i])
+            if active_schedules[i] in (once.get(date) or []):
+                once[date].remove(active_schedules[i])
+                if once[date] == []: once.pop(date)
                 schedule.set("once", once)
             if active_schedules[i] not in weekly_and_monthly:
                 active_schedules.pop(i)
             else:
                 i += 1
         schedule.set("active", active_schedules)
+        remove_non_existent_schedules()
 
 @micropython.native
 def reset_progress(current_time_with_date):
@@ -134,11 +167,16 @@ def reset_progress(current_time_with_date):
         schedule.set("is_complete", False)
         schedule.set("last_ring", schedule.get("gap") * -1)
         schedule.set("progress", -1)
+        skip = schedule.get("skip")
+        date = get_date()
+        if date in skip: skip.pop(date)
+        schedule.set("skip", skip)
 
 @micropython.native
 async def run():
     while True:
         try:
+            if not time_is_synced: await sleep(10)
             await sleep(0.1)
             running = get_active_schedule()
 
