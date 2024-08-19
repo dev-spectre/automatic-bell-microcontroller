@@ -8,7 +8,7 @@ from log import log
 
 app = Microdot()
 env = JSON("/.env.json")
-cors = CORS(app, allowed_origins="*", allow_credentials=True)
+cors = CORS(app, allowed_origins="*", allow_credentials=True, allowed_methods=["GET", "POST", "PUT", "DELETE"])
 
 @app.before_request
 async def authenticate(request):

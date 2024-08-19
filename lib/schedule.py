@@ -8,6 +8,44 @@ from clock import is_synced as time_is_synced, get_date
 schedule = JSON("/schedule.json")
 
 @micropython.native
+def convert_to_unix_time(time_string):
+    hour, minute = map(int, time_string.split(":"))
+    tm = (1970, 1, 1, hour, minute, 0, 0, 0)
+    unix_time = mktime(tm)
+    return unix_time
+
+@micropython.native
+def get_mode_string(mode):
+    duration = mode["duration"]
+    if mode["type"] == "single":
+        return f"timer/{duration}"
+    else:
+        ring_count = mode.get("ringCount", 0)
+        gap = mode.get("gap", 0)
+        return f"repeat/{ring_count}/{duration}/{gap}"
+    
+@micropython.native
+def expand_schedule(schedules):
+    expanded_schedule = {}
+    for sched in schedules:
+        start_time = convert_to_unix_time(sched["start"])
+        if sched["type"] == "session":
+            end_time = convert_to_unix_time(sched.get("end", ""))
+            include_end_time = sched.get("includeEndTime", True)
+            interval_in_seconds = sched.get("interval", 0) * 60
+            mode = get_mode_string(sched["mode"])
+            i = start_time
+            while i < end_time:
+                expanded_schedule[int(i)] = mode
+                i += interval_in_seconds
+            if include_end_time:
+                expanded_schedule[end_time] = mode
+        else:
+            mode = get_mode_string(sched["mode"])
+            expanded_schedule[start_time] = mode
+    return expanded_schedule
+
+@micropython.native
 def is_wild_schedule(schedule_name, strict=True):
     wild_schedule = schedule.get("schedules").get(schedule_name)
     if len(wild_schedule) == 0 or len(wild_schedule[0]) != 2: return False
@@ -72,7 +110,9 @@ def get_active_schedule():
         if i in weekly_schedules[weekday] or \
            i in (monthly_schedules.get(str(mday)) or []) or \
            i in once:
-            if not is_wild_schedule(i): active_schedule.update(schedules.get(i))
+            if not is_wild_schedule(i):
+                expanded_schedule = expand_schedule(schedules.get(i))
+                active_schedule.update(expanded_schedule)
     active_schedule = list(active_schedule.items())
     return sorted(active_schedule, key=lambda x: x[0])
 
