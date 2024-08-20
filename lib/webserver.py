@@ -481,7 +481,10 @@ async def run_schedule(request):
     if active_schedules == [] or active_schedules[-1] != schedule_name: active_schedules.append(schedule_name)
     once = schedule.get("once")
     date = get_date()
-    once[date] = once.get(date) or [schedule_name]
+    once_schedule_list = once.get(date)
+    if not once_schedule_list: [schedule_name]
+    else: once_schedule_list.append(schedule_name)
+    once[date] = once_schedule_list
     schedule.set("once", once)
     schedule.set("active", active_schedules)
     await sleep(0.5)
