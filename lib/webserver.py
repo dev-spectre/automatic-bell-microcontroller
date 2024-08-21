@@ -8,7 +8,7 @@ from log import log
 
 app = Microdot()
 env = JSON("/.env.json")
-cors = CORS(app, allowed_origins="*", allow_credentials=True, allowed_methods=["GET", "POST", "PUT", "DELETE"])
+cors = CORS(app, allowed_origins="*", allow_credentials=True)
 
 @app.before_request
 async def authenticate(request):
@@ -39,7 +39,7 @@ async def response(request):
 async def set_time(request):
     from clock import sync_from_unixtime, get_time
     
-    time = request.json
+    time = (request.json or {})
     unixtime = time.get("unixtime")
     
     if not unixtime:
@@ -54,15 +54,21 @@ async def set_time(request):
 
 @app.get("/config")
 async def get_config(request):
-    key = request.json.get("key")
+    args = request.args
     
-    if not key:
+    if not args:
         return {
             "success": True,
             "data": config.load(),
             }, 200
     
-    value = config.get(key)
+    keys = args.getlist("key")
+    values = {}
+    for key in keys:
+        value = config.get(key)
+        if value:
+            values[key] = value
+        
     if not value:
         return {
             "success": False,
@@ -71,12 +77,12 @@ async def get_config(request):
     
     return {
         "success": True,
-        "data": { "value": value },
+        "data": values,
         }
 
 @app.route("/config", methods=["POST", "PUT"])
 async def set_config(request):
-    prop = request.json
+    prop = (request.json or {})
     
     if not prop.get("key") or not prop.get("value"):
         return {
@@ -124,7 +130,7 @@ async def set_config(request):
 
 @app.delete("/config")
 async def remove_config(request):
-    key = request.json.get("key")
+    key = (request.json or {}).get("key")
     
     if not key:
         return {
@@ -152,16 +158,22 @@ async def remove_config(request):
 
 @app.get("/schedule")
 async def get_schedule(request):
-    key = request.json.get("key")
+    args = request.args
     
-    if not key:
+    if not args:
         return {
             "success": True,
             "data": schedule.load(),
             }, 200
     
-    value = schedule.get("schedules").get(key)
-    if not value:
+    keys = args.getlist("key")
+    values = {}
+    for key in keys:
+        value = schedule.get(key)
+        if value:
+            values[key] = value
+        
+    if not values:
         return {
             "success": False,
             "msg": "Key doesn't exist"
@@ -169,14 +181,14 @@ async def get_schedule(request):
     
     return {
         "success": True,
-        "data": { key: value },
+        "data": values,
         }, 200
 
 
 @app.delete("/schedule")
 async def delete_schedule(request):
-    schedules_to_delete = request.json.get("keys")
-    force = request.json.get("force")
+    schedules_to_delete = (request.json or {}).get("keys")
+    force = (request.json or {}).get("force")
 
     if not schedules_to_delete:
         return {
@@ -231,13 +243,13 @@ async def delete_schedule(request):
 
 @app.route("/schedule", methods=["POST", "PUT"])
 async def set_schedule(request):
-    schedules_update = request.json.get("schedules")
-    weekly_schedules_update = request.json.get("weekly") or {}
-    monthly_schedules_update = request.json.get("monthly") or {}
-    once_update = request.json.get("once") or {}
-    force_add = request.json.get("force")
-    is_assign_only = request.json.get("isAssignOnly")
-    remove_existing = request.json.get("removeExisting")
+    schedules_update = (request.json or {}).get("schedules")
+    weekly_schedules_update = (request.json or {}).get("weekly") or {}
+    monthly_schedules_update = (request.json or {}).get("monthly") or {}
+    once_update = (request.json or {}).get("once") or {}
+    force_add = (request.json or {}).get("force")
+    is_assign_only = (request.json or {}).get("isAssignOnly")
+    remove_existing = (request.json or {}).get("removeExisting")
     
     if not force_add and not weekly_schedules_update and not monthly_schedules_update and not once_update:
         return {
@@ -344,7 +356,7 @@ async def get_active_schedule(request):
 
 @app.put("/schedule/active")
 async def set_active_schedule(request):
-    active = request.json.get("active")
+    active = (request.json or {}).get("active")
     if not all_schedule_exists(*active):
         return {
             "success": False,
@@ -368,7 +380,7 @@ async def get_active_schedule(request):
 
 @app.put("/schedule/skip")
 async def set_active_schedule(request):
-    skip_update = request.json.get("skip")
+    skip_update = (request.json or {}).get("skip")
     if not skip_update:
         return {
             "success": False,
@@ -388,7 +400,7 @@ async def set_active_schedule(request):
 
 @app.put("/schedule/gap")
 async def set_schedule_gap(request):
-    gap = request.json.get("gap")
+    gap = (request.json or {}).get("gap")
     if not gap:
         return {
             "success": False,
@@ -412,7 +424,7 @@ async def set_schedule_gap(request):
 
 @app.put("/schedule/wait")
 async def set_schedule_max_wait(request):
-    max_wait = request.json.get("wait")
+    max_wait = (request.json or {}).get("wait")
     if not max_wait:
         return {
             "success": False,
@@ -436,7 +448,7 @@ async def set_schedule_max_wait(request):
 
 @app.post("/bell/ring")
 async def manual_ring(request):
-    mode = request.json.get("mode")
+    mode = (request.json or {}).get("mode")
     if not mode:
         return {
             "success": False,
@@ -450,7 +462,7 @@ async def manual_ring(request):
 @app.put("/schedule/run")
 async def run_schedule(request):
     from time import time
-    schedule_name = request.json.get("schedule")
+    schedule_name = (request.json or {}).get("schedule")
     schedules = schedule.get("schedules")
 
     if not schedule_name:
@@ -498,9 +510,9 @@ async def signup(request):
     from urequests import post, put
     from json import dumps
     
-    key = request.json.get("key")
-    username = request.json.get("username")
-    password = request.json.get("password")
+    key = (request.json or {}).get("key")
+    username = (request.json or {}).get("username")
+    password = (request.json or {}).get("password")
     
     if key != env.get("key"):
         return {
@@ -512,18 +524,18 @@ async def signup(request):
         "username": username,
         "password": password,
         })
-
+    
     user_response = post(f"{config.get('backend_api')}/user/signup", headers={
         "Content-Type": "application/json",
         "Authorization": env.get("jwt"),
         }, data=payload
         ).json()
-    
+
     if not user_response.get("success"):
         return user_response
     
     payload = dumps({
-            "deviceId": request.json.get("id"),
+            "deviceId": (request.json or {}).get("id"),
             "userId": user_response.get("data").get("id"),
         })
     res = put(f"{config.get('backend_api')}/device/assign", headers={
@@ -544,7 +556,7 @@ async def signup(request):
 async def signin(request):
     from urequests import delete
     
-    userkey_id = request.json.get("userKeyId")
+    userkey_id = (request.json or {}).get("userKeyId")
     res = delete(f"{config.get('backend_api')}/user/key", headers={
         "Content-Type": "application/json",
         "Authorization": env.get("jwt")
@@ -564,16 +576,16 @@ async def reset_password(request):
     from urequests import put
     from json import dumps
  
-    if request.json.get("key") != env.get("key"):
+    if (request.json or {}).get("key") != env.get("key"):
         return {
             "success": False,
             "msg": "Invalid key",
             }
 
     payload = dumps({
-        "username": request.json.get("username"),
-        "password": request.json.get("password"),
-        "key": request.json.get("key"),
+        "username": (request.json or {}).get("username"),
+        "password": (request.json or {}).get("password"),
+        "key": (request.json or {}).get("key"),
         })
     res = put(f"{config.get('backend_api')}/user/password/reset", headers={
         "Content-Type": "application/json",
