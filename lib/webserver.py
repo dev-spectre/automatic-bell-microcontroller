@@ -507,8 +507,11 @@ async def run_schedule(request):
 
 @app.post("/signup")
 async def signup(request):
+    from gc import  collect
     from urequests import post, put
     from json import dumps
+    
+    collect()
     
     key = (request.json or {}).get("key")
     username = (request.json or {}).get("username")
@@ -543,6 +546,9 @@ async def signup(request):
         "Authorization": env.get("jwt"),
         }, data=payload
         ).json()
+    
+    collect()
+    
     return {
         "success": True,
         "data": {
@@ -555,6 +561,9 @@ async def signup(request):
 @app.post("/signin")
 async def signin(request):
     from urequests import delete
+    from gc import collect
+    
+    collect()
     
     userkey_id = (request.json or {}).get("userKeyId")
     res = delete(f"{config.get('backend_api')}/user/key", headers={
@@ -567,6 +576,9 @@ async def signin(request):
     if not res.get("success") or not res.get("data").get("userKey"): return { "success": False }
     userkey = res.get("data").get("userKey")
     env.set("userkey", f"Bearer {userkey}")
+    
+    collect()
+    
     return {
         "success": True,
         }
@@ -612,6 +624,8 @@ async def not_found(request):
 
 @app.errorhandler(OSError)
 def os_error(request, exception):
+    from gc import collect
+    collect()
     log(exception)
     return {
         "success": False,
