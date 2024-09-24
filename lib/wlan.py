@@ -127,7 +127,6 @@ def register_ip():
         res = post(f"{config.get('backend_api')}/device", headers=header, data=payload).json()
         if res.get("success"):
             env.set("ip", ip)
-            env.set("jwt", f"Bearer {res['data'].get('jwt')}")
             device_id = env.set("device_id", res["data"].get("deviceId"))
             log("Device registered on database with id", device_id)
             return device_id
