@@ -1,5 +1,5 @@
 from switch import switch_on, switch_off, timer, repeat_timer
-from config import JSON
+from config import JSON, config
 from log import log
 from time import mktime, localtime, time
 from asyncio import sleep
@@ -139,7 +139,7 @@ def get_next_ring_index(running, progress, current_time):
     for i in r:
         unixtime = remove_date_from_unixtime(running[i][0])
         has_rang = progress >= unixtime
-        if current_time <= unixtime or 0 < current_time - unixtime < int(schedule.get("max_wait")) and not has_rang:
+        if current_time <= unixtime or 0 < current_time - unixtime < int(config.get("max_wait")) and not has_rang:
             return i
     return -1
 
@@ -207,11 +207,11 @@ def reset_progress(current_time_with_date):
         midnight_reset_count = schedule.get("midnight_reset_count")
         schedule.set("midnight_reset_count", midnight_reset_count + 1)
         schedule.set("progress", 0)
-        schedule.set("last_ring", schedule.get("gap") * -1)
-    if schedule.get("is_complete") and current_time_with_date - schedule.get("completed_on") > int(schedule.get("max_wait")):
+        schedule.set("last_ring", config.get("gap") * -1)
+    if schedule.get("is_complete") and current_time_with_date - schedule.get("completed_on") > int(config.get("max_wait")):
         log("reset schedule")
         schedule.set("is_complete", False)
-        schedule.set("last_ring", schedule.get("gap") * -1)
+        schedule.set("last_ring", config.get("gap") * -1)
         schedule.set("progress", -1)
         skip = schedule.get("skip")
         date = get_date()
@@ -222,7 +222,7 @@ def reset_progress(current_time_with_date):
 async def run():
     while True:
         try:
-            if not time_is_synced: await sleep(10)
+            if not time_is_synced: await sleep(5)
             await sleep(0.1)
             running = get_active_schedule()
 
@@ -241,18 +241,18 @@ async def run():
             idx = get_next_ring_index(running, progress, current_time)
             next_ring = remove_date_from_unixtime(running[idx][0])
             has_rang = progress >= next_ring
-
-            if (current_time == next_ring or (0 < current_time - next_ring < int(schedule.get("max_wait"))) and not has_rang) and schedule.get("last_ring") + schedule.get("gap") < current_time:
+            
+            if (current_time == next_ring or (0 < current_time - next_ring < int(config.get("max_wait"))) and not has_rang) and schedule.get("last_ring") + config.get("gap") < current_time:
                 params = running[idx][1]
                 log(running, params, idx)
                 ring_bell(params)
                 save_progress(running, idx, current_time_with_date, next_ring)
             elif current_time < next_ring:
                 await sleep(next_ring - current_time)
-            elif schedule.get("last_ring") + schedule.get("gap") >= current_time:
-                await sleep(schedule.get("last_ring") + schedule.get("gap") - current_time)
+            elif schedule.get("last_ring") + config.get("gap") >= current_time:
+                await sleep(schedule.get("last_ring") + config.get("gap") - current_time)
             else:
-                await sleep(10)
+                await sleep(1)
         except Exception as err:
-            await sleep(1)
+            await sleep(0.1)
             log(err, function_name = "schedule.run")

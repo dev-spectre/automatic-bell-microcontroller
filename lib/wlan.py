@@ -3,7 +3,7 @@ from config import config
 from log import log
 
 wlan = WLAN(STA_IF)
-wlan.config(pm=WLAN.PM_PERFORMANCE)
+wlan.config(pm=WLAN.PM_NONE)
 wlan.active(True)
 
 def get_mac():
@@ -31,7 +31,7 @@ def connect(ssid, password):
         wlan.active(True)
         
     wlan.connect(ssid, password)
-    max_wait = config.get("max_wait")
+    max_wait = config.get("max_attempts")
     no_ap_retry = 20
     while not wlan.isconnected() and max_wait != 0:
         pico_led.toggle()
