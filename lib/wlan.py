@@ -49,6 +49,9 @@ def connect(ssid, password):
             raise WrongPassword()
         elif status == STAT_CONNECT_FAIL:
             raise ConnectionFailed()
+        elif status == 0:
+            from machine import reset
+            reset()
 
         print(f"SSID: {ssid}, Password: {password}, status:", status)
         max_wait -= 1

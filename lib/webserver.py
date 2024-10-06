@@ -15,97 +15,19 @@ async def authenticate(request):
     if request.path in ["/", "/signup", "/signin", "/res", "/password/reset"]: return None
     jwt = request.headers.get("Authorization")
     userkey = env.get("userkey") 
-    if jwt != userkey:
+    if jwt not in userkey:
         return {
             "success": False,
             "msg": "Invalid JWT"
             }
 
-@app.get("/")
-async def index(request):
-    from wlan import get_ip
-    
-    protocol = config.get("frontend_protocol")
-    if not protocol:
-        protocol = "http"
-        
-    return redirect(f"{protocol}://{config.get('frontend_domain')}/?ip={get_ip()}")
-
 @app.get("/res")
 async def response(request):
     return { "success": True }
 
-@app.put("/time")
-async def set_time(request):
-    from clock import sync_from_unixtime, get_time
-    
-    time = (request.json or {})
-    unixtime = time.get("unixtime")
-    
-    if not unixtime:
-        return { "success": False }
-    
-    sync_from_unixtime(unixtime)
-    
-    return {
-        "success": True,
-        "data": { "datetime": get_time() },
-        }
-
-@app.get("/config")
-async def get_config(request):
-    args = request.args
-    
-    if not args:
-        return {
-            "success": True,
-            "data": config.load(),
-            }, 200
-    
-    keys = args.getlist("key")
-    values = {}
-    for key in keys:
-        value = config.get(key)
-        if value:
-            values[key] = value
-        
-    if not value:
-        return {
-            "success": False,
-            "msg": "Key doesn't exist"
-            }
-    
-    return {
-        "success": True,
-        "data": values,
-        }
-
-@app.route("/config", methods=["PUT"])
-async def set_config(request):
-    new_config = (request.json or {})
-    
-    if not new_config:
-        return {
-            "success": False,
-            "msg": "Missing parameters",
-            }, 422
-
-    updated = {}
-    for key in new_config:
-        if config.get(key) is None: continue
-        config.set(key, new_config.get(key))
-        updated[key] = new_config.get(key)
-    
-    if not updated:
-        return {
-            "success": False,
-            "msg": "Couldn't set config",
-            }, 500
-    
-    return {
-        "success": True,
-        "data": updated,
-        }, 201
+@app.get("/verify")
+async def verify(request):
+    return { "success": True }
 
 @app.get("/schedule")
 async def get_schedule(request):
@@ -135,62 +57,81 @@ async def get_schedule(request):
         "data": values,
         }, 200
 
-
-@app.delete("/schedule")
-async def delete_schedule(request):
-    schedules_to_delete = (request.json or {}).get("keys")
-    force = (request.json or {}).get("force")
-
-    if not schedules_to_delete:
+@app.get("/config")
+async def get_config(request):
+    args = request.args
+    
+    if not args:
+        return {
+            "success": True,
+            "data": config.load(),
+            }, 200
+    
+    keys = args.getlist("key")
+    values = {}
+    for key in keys:
+        value = config.get(key)
+        if value:
+            values[key] = value
+        
+    if not value:
         return {
             "success": False,
-            "msg": "No schedules given to delete",
-            }, 422
-
-    schedules = schedule.get("schedules")
-    deleted = {}
-    active = schedule.get("active")
-    weekly_schedules = schedule.get("weekly")
-    monthly_schedules = schedule.get("monthly")
-    once = schedule.get("once")
-    skip = schedule.get("skip")
-    wild_schedules = schedule.get("wild_schedules")
-
-    for key in schedules_to_delete:
-        if key in active and not force or key not in schedules: continue
-        if key in wild_schedules: wild_schedules.remove(key)
-        
-        if key in active:
-            active.remove(key)
-            
-        for date in list(once.keys()):
-            if key in once[date]:
-                once[date].remove(key)
-            if not once[date]: once.pop(date)
-
-        for date in list(skip.keys()):
-            if key in skip[date]:
-                skip[date].remove(key)
-            if not skip[date]: skip.pop(date)
-        
-        for weekly_schedule in weekly_schedules:
-            if key in weekly_schedule:
-                weekly_schedule.remove(key)
-
-        for date in list(monthly_schedules.keys()):
-            if key in monthly_schedules[date]:
-                monthly_schedules[date].remove(key)
-            if not monthly_schedules[date]: monthly_schedules.pop(date)
-
-        deleted[key] = schedules.pop(key)
-    schedule.set("schedules", schedules)
-    schedule.set("once", once)
-    schedule.set("monthly", monthly_schedules)
-    schedule.set("weekly", weekly_schedules)
+            "msg": "Key doesn't exist"
+            }
+    
     return {
         "success": True,
-        "data": deleted,
-        }, 200
+        "data": values,
+        }
+
+@app.put("/schedule/active")
+async def set_active_schedule(request):
+    active = (request.json or {}).get("active")
+    if not all_schedule_exists(*active):
+        return {
+            "success": False,
+            "msg": "Schedule doesn't exists",
+            }, 404
+
+    unique_active = []
+    active_dict = dict.fromkeys(active)
+    r = range(len(active) - 1, -1, -1)
+    for i in r:
+        schedule_name = active[i]
+        if active_dict[schedule_name] is None:
+            active_dict[schedule_name] = True
+            unique_active.append(schedule_name)
+
+    unique_active = unique_active[::-1]
+
+    schedule.set("active", unique_active)
+    return {
+        "success": True,
+        "data": {
+            "active": unique_active,
+            },
+        }, 201
+
+@app.put("/schedule/skip")
+async def set_active_schedule(request):
+    skip_update = (request.json or {}).get("skip")
+    if not skip_update:
+        return {
+            "success": False,
+            "msg": "Missing parameters",
+            }, 404
+
+    skip = schedule.get("skip")
+    skip.update(skip_update)
+    schedule.set("skip", skip)
+    
+    return {
+        "success": True,
+        "data": {
+            "skip": skip,
+            },
+        }, 201
 
 @app.route("/schedule", methods=["POST", "PUT"])
 async def set_schedule(request):
@@ -298,116 +239,142 @@ async def set_schedule(request):
         "data": added,
         }, 201
 
-@app.get("/schedule/active")
-async def get_active_schedule(request):
-    return {
-        "success": True,
-        "data": schedule.get("active")
-        }, 200
+@app.delete("/schedule")
+async def delete_schedule(request):
+    schedules_to_delete = (request.json or {}).get("keys")
+    force = (request.json or {}).get("force")
 
-@app.put("/schedule/active")
-async def set_active_schedule(request):
-    active = (request.json or {}).get("active")
-    if not all_schedule_exists(*active):
+    if not schedules_to_delete:
         return {
             "success": False,
-            "msg": "Schedule doesn't exists",
-            }, 404
+            "msg": "No schedules given to delete",
+            }, 422
 
-    unique_active = []
-    active_dict = dict.fromkeys(active)
-    r = range(len(active) - 1, -1, -1)
-    for i in r:
-        schedule_name = active[i]
-        if active_dict[schedule_name] is None:
-            active_dict[schedule_name] = True
-            unique_active.append(schedule_name)
+    schedules = schedule.get("schedules")
+    deleted = {}
+    active = schedule.get("active")
+    weekly_schedules = schedule.get("weekly")
+    monthly_schedules = schedule.get("monthly")
+    once = schedule.get("once")
+    skip = schedule.get("skip")
+    wild_schedules = schedule.get("wild_schedules")
 
-    unique_active = unique_active[::-1]
+    for key in schedules_to_delete:
+        if key in active and not force or key not in schedules: continue
+        if key in wild_schedules: wild_schedules.remove(key)
+        
+        if key in active:
+            active.remove(key)
+            
+        for date in list(once.keys()):
+            if key in once[date]:
+                once[date].remove(key)
+            if not once[date]: once.pop(date)
 
-    schedule.set("active", unique_active)
+        for date in list(skip.keys()):
+            if key in skip[date]:
+                skip[date].remove(key)
+            if not skip[date]: skip.pop(date)
+        
+        for weekly_schedule in weekly_schedules:
+            if key in weekly_schedule:
+                weekly_schedule.remove(key)
+
+        for date in list(monthly_schedules.keys()):
+            if key in monthly_schedules[date]:
+                monthly_schedules[date].remove(key)
+            if not monthly_schedules[date]: monthly_schedules.pop(date)
+
+        deleted[key] = schedules.pop(key)
+    schedule.set("schedules", schedules)
+    schedule.set("once", once)
+    schedule.set("monthly", monthly_schedules)
+    schedule.set("weekly", weekly_schedules)
     return {
         "success": True,
-        "data": {
-            "active": unique_active,
-            },
-        }, 201
-
-@app.get("/schedule/skip")
-async def get_active_schedule(request):
-    return {
-        "success": True,
-        "data": schedule.get("skip")
+        "data": deleted,
         }, 200
 
-@app.put("/schedule/skip")
-async def set_active_schedule(request):
-    skip_update = (request.json or {}).get("skip")
-    if not skip_update:
+@app.post("/signin")
+async def signin(request):
+    from urequests import delete
+    from gc import collect
+
+    collect()
+
+    userkey_id = (request.json or {}).get("userKeyId")
+    res = delete(f"{config.get('backend_api')}/user/key", headers={
+        "Content-Type": "application/json",
+        "Authorization": env.get("jwt")
+        },
+        json={
+            "userKeyId": userkey_id
+        }).json()
+    if not res.get("success") or not res.get("data").get("userKey"): return { "success": False }
+    userkey = res.get("data").get("userKey")
+
+    userkeys = env.get("userkey")
+    userkeys.append(f"Bearer {userkey}")
+    if len(userkeys) > 10:
+        userkeys = userkeys[-10: -1]
+    env.set("userkey", userkeys)
+
+    collect()
+    
+    return {
+        "success": True,
+        }
+
+@app.route("/config", methods=["PUT"])
+async def set_config(request):
+    new_config = (request.json or {})
+    
+    if not new_config:
         return {
             "success": False,
             "msg": "Missing parameters",
-            }, 404
-
-    skip = schedule.get("skip")
-    skip.update(skip_update)
-    schedule.set("skip", skip)
-    
-    return {
-        "success": True,
-        "data": {
-            "skip": skip,
-            },
-        }, 201
-
-@app.put("/schedule/gap")
-async def set_schedule_gap(request):
-    gap = (request.json or {}).get("gap")
-    if not gap:
-        return {
-            "success": False,
-            "msg": "Missing parameters"
             }, 422
+
+    updated = {}
+    for key in new_config:
+        if config.get(key) is None: continue
+        config.set(key, new_config.get(key))
+        updated[key] = new_config.get(key)
     
-    if type(0) != type(gap) or not 0 <= gap <= 60:
+    if not updated:
         return {
             "success": False,
-            "msg": "Invalid input",
-            }
+            "msg": "Couldn't set config",
+            }, 500
     
-    config.set("gap", gap)
     return {
         "success": True,
-        "msg": f"Schedule gap set to {gap} second(s)",
-        "data": {
-            "gap": gap,
-            },
+        "data": updated,
         }, 201
 
-@app.put("/schedule/wait")
-async def set_schedule_max_wait(request):
-    max_wait = (request.json or {}).get("wait")
-    if not max_wait:
+@app.put("/password/reset")
+async def reset_password(request):
+    from urequests import put
+    from json import dumps
+ 
+    if (request.json or {}).get("key") != env.get("key"):
         return {
             "success": False,
-            "msg": "Missing parameters"
-            }, 422
-    
-    if type(0) != type(max_wait) or not 20 <= max_wait <= 300:
-        return {
-            "success": False,
-            "msg": "Invalid input",
+            "msg": "Invalid key",
             }
-    
-    config.set("max_wait", max_wait)
 
-    return {
-        "success": True,
-        "msg": f"Schedule max_wait set to {max_wait} second(s)",
-        "data": {
-            "wait": max_wait,
-            },
-        }, 201
+    payload = dumps({
+        "username": (request.json or {}).get("username"),
+        "password": (request.json or {}).get("password"),
+        "key": (request.json or {}).get("key"),
+        })
+    res = put(f"{config.get('backend_api')}/user/password/reset", headers={
+        "Content-Type": "application/json",
+        "Authorization": env.get("jwt"),
+        }, data=payload
+        ).json()
+    
+    return res
 
 @app.post("/bell/ring")
 async def manual_ring(request):
@@ -420,52 +387,6 @@ async def manual_ring(request):
     ring_bell(mode)
     return {
         "success": True,
-        }, 201
-
-@app.put("/schedule/run")
-async def run_schedule(request):
-    from time import time
-    schedule_name = (request.json or {}).get("schedule")
-    schedules = schedule.get("schedules")
-
-    if not schedule_name:
-        return {
-            "success": False,
-            "msg": "Missing parameters",
-            }, 422
-
-    if not schedules.get(schedule_name):
-        return {
-            "success": False,
-            "msg": "Schedule doesn't exist",
-            }, 404
-    
-    if is_wild_schedule(schedule_name):
-        wild_schedule = schedules.get(schedule_name)
-
-        prev_time = time()
-        wild_schedule[0][0] = prev_time
-        r = range(1, len(wild_schedule))
-        for i in r:
-            gap = int(wild_schedule[i][0][1:])
-            prev_time += gap
-            wild_schedule[i][0] = prev_time
-        schedule.set("schedules", schedules)
-
-    active_schedules = schedule.get("active")
-    if active_schedules == [] or active_schedules[-1] != schedule_name: active_schedules.append(schedule_name)
-    once = schedule.get("once")
-    date = get_date()
-    once_schedule_list = once.get(date)
-    if not once_schedule_list: [schedule_name]
-    else: once_schedule_list.append(schedule_name)
-    once[date] = once_schedule_list
-    schedule.set("once", once)
-    schedule.set("active", active_schedules)
-    await sleep(0.5)
-    return {
-        "success": True,
-        "msg": "Schedule added to active schedules"
         }, 201
 
 @app.post("/signup")
@@ -521,54 +442,78 @@ async def signup(request):
             }
         }
 
-@app.post("/signin")
-async def signin(request):
-    from urequests import delete
-    from gc import collect
+@app.put("/schedule/run")
+async def run_schedule(request):
+    from time import time
+    schedule_name = (request.json or {}).get("schedule")
+    schedules = schedule.get("schedules")
+
+    if not schedule_name:
+        return {
+            "success": False,
+            "msg": "Missing parameters",
+            }, 422
+
+    if not schedules.get(schedule_name):
+        return {
+            "success": False,
+            "msg": "Schedule doesn't exist",
+            }, 404
     
-    collect()
+    if is_wild_schedule(schedule_name):
+        wild_schedule = schedules.get(schedule_name)
+
+        prev_time = time()
+        wild_schedule[0][0] = prev_time
+        r = range(1, len(wild_schedule))
+        for i in r:
+            gap = int(wild_schedule[i][0][1:])
+            prev_time += gap
+            wild_schedule[i][0] = prev_time
+        schedule.set("schedules", schedules)
+
+    active_schedules = schedule.get("active")
+    if active_schedules == [] or active_schedules[-1] != schedule_name: active_schedules.append(schedule_name)
+    once = schedule.get("once")
+    date = get_date()
+    once_schedule_list = once.get(date)
+    if not once_schedule_list: [schedule_name]
+    else: once_schedule_list.append(schedule_name)
+    once[date] = once_schedule_list
+    schedule.set("once", once)
+    schedule.set("active", active_schedules)
+    await sleep(0.5)
+    return {
+        "success": True,
+        "msg": "Schedule added to active schedules"
+        }, 201
+
+@app.put("/time")
+async def set_time(request):
+    from clock import sync_from_unixtime, get_time
     
-    userkey_id = (request.json or {}).get("userKeyId")
-    res = delete(f"{config.get('backend_api')}/user/key", headers={
-        "Content-Type": "application/json",
-        "Authorization": env.get("jwt")
-        },
-        json={
-            "userKeyId": userkey_id
-        }).json()
-    if not res.get("success") or not res.get("data").get("userKey"): return { "success": False }
-    userkey = res.get("data").get("userKey")
-    env.set("userkey", f"Bearer {userkey}")
+    time = (request.json or {})
+    unixtime = time.get("unixtime")
     
-    collect()
+    if not unixtime:
+        return { "success": False }
+    
+    sync_from_unixtime(unixtime)
     
     return {
         "success": True,
+        "data": { "datetime": get_time() },
         }
 
-@app.put("/password/reset")
-async def reset_password(request):
-    from urequests import put
-    from json import dumps
- 
-    if (request.json or {}).get("key") != env.get("key"):
-        return {
-            "success": False,
-            "msg": "Invalid key",
-            }
-
-    payload = dumps({
-        "username": (request.json or {}).get("username"),
-        "password": (request.json or {}).get("password"),
-        "key": (request.json or {}).get("key"),
-        })
-    res = put(f"{config.get('backend_api')}/user/password/reset", headers={
-        "Content-Type": "application/json",
-        "Authorization": env.get("jwt"),
-        }, data=payload
-        ).json()
+@app.get("/")
+async def index(request):
+    from wlan import get_ip
     
-    return res
+    protocol = config.get("frontend_protocol")
+    if not protocol:
+        protocol = "http"
+        
+    return redirect(f"{protocol}://{config.get('frontend_domain')}/?ip={get_ip()}")
 
 @app.errorhandler(413)
 async def max_req_length(request):
