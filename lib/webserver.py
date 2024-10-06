@@ -488,23 +488,6 @@ async def run_schedule(request):
         "msg": "Schedule added to active schedules"
         }, 201
 
-@app.put("/time")
-async def set_time(request):
-    from clock import sync_from_unixtime, get_time
-    
-    time = (request.json or {})
-    unixtime = time.get("unixtime")
-    
-    if not unixtime:
-        return { "success": False }
-    
-    sync_from_unixtime(unixtime)
-    
-    return {
-        "success": True,
-        "data": { "datetime": get_time() },
-        }
-
 @app.get("/")
 async def index(request):
     from wlan import get_ip
