@@ -314,11 +314,22 @@ async def set_active_schedule(request):
             "msg": "Schedule doesn't exists",
             }, 404
 
-    schedule.set("active", active)
+    unique_active = []
+    active_dict = dict.fromkeys(active)
+    r = range(len(active) - 1, -1, -1)
+    for i in r:
+        schedule_name = active[i]
+        if active_dict[schedule_name] is None:
+            active_dict[schedule_name] = True
+            unique_active.append(schedule_name)
+
+    unique_active = unique_active[::-1]
+
+    schedule.set("active", unique_active)
     return {
         "success": True,
         "data": {
-            "active": active,
+            "active": unique_active,
             },
         }, 201
 
@@ -577,12 +588,14 @@ async def not_found(request):
 @app.errorhandler(OSError)
 def os_error(request, exception):
     from gc import collect
+    from machine import reset
     collect()
     log(exception)
+    reset()
     return {
         "success": False,
         "msg": "OS Error",
-        }, 500
+        }, 501
 
 @app.errorhandler(RuntimeError)
 def runtime_error(request, exception):

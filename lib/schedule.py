@@ -61,7 +61,6 @@ def is_wild_schedule(schedule_name, strict=True):
 @micropython.native
 def all_schedule_exists(*schedule_list):
     schedules = schedule.get("schedules")
-    if len(schedule_list) > len(schedules): return False
     for i in schedule_list:
         if i not in schedules: return False
     return True
