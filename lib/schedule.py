@@ -246,10 +246,10 @@ async def run():
                 log(running, params, idx)
                 ring_bell(params)
                 save_progress(running, idx, current_time_with_date, next_ring)
-            elif current_time < next_ring:
-                await sleep(next_ring - current_time)
-            elif schedule.get("last_ring") + config.get("gap") >= current_time:
-                await sleep(schedule.get("last_ring") + config.get("gap") - current_time)
+#            elif current_time < next_ring:
+#                await sleep(next_ring - current_time)
+#            elif schedule.get("last_ring") + config.get("gap") >= current_time:
+#                await sleep(schedule.get("last_ring") + config.get("gap") - current_time)
             else:
                 await sleep(1)
         except Exception as err:
